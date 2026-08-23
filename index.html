@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#F6CF68">
+<title>ちょい計算パンダ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Kosugi+Maru&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FFFDF9;
+    --surface:#FFFFFF;
+    --text:#6B5646;
+    --muted:#9C8874;
+    --rose:#F6CF68;
+    --rose-dark:#DDAE3F;
+    --divider:#EFE4D5;
+    --card-border: 1px solid var(--divider);
+    --danger-text:#B8747C;
+    --mint:#7FC4B8;
+    --current-feature-color: var(--rose);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Kosugi Maru','Hiragino Sans',sans-serif;
+    overscroll-behavior-y:none;
+  }
+  #app{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    background:var(--bg);
+    position:relative;
+  }
+  header.topbar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:14px 16px;
+    margin:14px 18px 6px;
+    position:sticky;
+    top:14px;
+    background:var(--surface);
+    border-radius:18px;
+    border:var(--card-border);
+    z-index:5;
+  }
+  header.topbar h1{
+    font-family:'Zen Maru Gothic', sans-serif;
+    font-weight:700;
+    font-size:20px;
+    margin:0;
+    flex:1;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .title-icon{
+    width:26px; height:26px;
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--mint);
+  }
+  .title-icon svg{
+    width:100%; height:100%;
+  }
+  .iconbtn{
+    width:38px; height:38px;
+    border-radius:50%;
+    border:none;
+    background:transparent;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    color:var(--text);
+    flex-shrink:0;
+  }
+  .iconbtn svg{width:19px; height:19px;}
+  .iconbtn.back-btn svg{width:23px; height:23px;}
+  main{ flex:1; padding:4px 18px 120px; }
+
+  /* ---- Home: menu list ---- */
+  .menu-card{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:var(--surface);
+    border-radius:18px;
+    padding:16px 16px;
+    margin-bottom:12px;
+    border:var(--card-border);
+    cursor:pointer;
+  }
+  .dot{
+    width:16px; height:16px;
+    border-radius:50%;
+    flex-shrink:0;
+  }
+  .menu-card .name{
+    flex:1;
+    font-weight:700;
+    font-size:17px;
+    font-family:'Zen Maru Gothic', sans-serif;
+  }
+  .menu-card .arrow{
+    color:var(--muted);
+    flex-shrink:0;
+    display:flex;
+  }
+  .menu-card .arrow svg{ width:18px; height:18px; }
+
+  .home-hero-fixed{
+    position:fixed;
+    left:50%;
+    bottom:42px;
+    transform:translateX(-50%);
+    width:100%;
+    max-width:480px;
+    text-align:center;
+    color:var(--muted);
+    font-size:14px;
+    line-height:1.6;
+    pointer-events:none;
+    z-index:4;
+  }
+  .home-hero-fixed img{
+    width:118px;
+    height:118px;
+    object-fit:contain;
+    display:block;
+    margin:0 auto 4px;
+  }
+
+  /* ---- 計算画面 共通 ---- */
+  .calc-field{
+    background:var(--surface);
+    border-radius:16px;
+    padding:14px 16px;
+    margin-bottom:12px;
+    border:var(--card-border);
+  }
+  .calc-field label{
+    display:block;
+    font-size:13.5px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .calc-field .field-row{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+  }
+  .calc-field input[type=number], .calc-field select{
+    flex:1;
+    border:none;
+    outline:none;
+    background:transparent;
+    font-family:'Zen Maru Gothic',sans-serif;
+    font-size:20px;
+    font-weight:700;
+    color:var(--text);
+    width:100%;
+    padding:4px 0;
+    -moz-appearance:textfield;
+  }
+  .calc-field input::-webkit-outer-spin-button,
+  .calc-field input::-webkit-inner-spin-button{
+    -webkit-appearance:none; margin:0;
+  }
+  .calc-field .unit{
+    font-size:16px;
+    font-weight:500;
+    color:var(--muted);
+    flex-shrink:0;
+  }
+  .calc-field select{
+    font-size:16px;
+    -webkit-appearance:none;
+    appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239C8874' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+    background-repeat:no-repeat;
+    background-position:right 2px center;
+    background-size:16px;
+    padding-left:4px;
+    padding-right:22px;
+  }
+  .calc-field select.unit-select{
+    padding-left:4px;
+  }
+  .segment{
+    display:flex;
+    gap:8px;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+  }
+  .segment button{
+    flex:1;
+    min-width:calc(50% - 4px);
+    padding:11px 8px;
+    border-radius:12px;
+    border:1px solid var(--divider);
+    background:var(--surface);
+    color:var(--muted);
+    font-family:'Kosugi Maru',sans-serif;
+    font-size:13px;
+    line-height:1.3;
+    cursor:pointer;
+  }
+  .segment button.active{
+    background:var(--rose);
+    border-color:var(--rose);
+    color:var(--text);
+    font-family:'Zen Maru Gothic', sans-serif;
+    font-weight:700;
+  }
+  .section-label{
+    font-family:'Zen Maru Gothic', sans-serif;
+    font-weight:700;
+    font-size:15px;
+    margin:20px 0 10px 2px;
+  }
+  .section-label:first-child{ margin-top:4px; }
+  .calc-btn{
+    width:100%;
+    padding:15px;
+    border-radius:16px;
+    background:var(--current-feature-color, var(--rose));
+    color:#FFFFFF;
+    border:none;
+    font-size:16px;
+    font-weight:700;
+    font-family:'Zen Maru Gothic', sans-serif;
+    cursor:pointer;
+    margin-top:6px;
+  }
+  .clear-link{
+    text-align:center;
+    font-size:13px;
+    color:var(--muted);
+    margin-top:12px;
+    cursor:pointer;
+  }
+
+  /* ---- 結果カード ---- */
+  .result-card{
+    background:var(--surface);
+    border-radius:20px;
+    padding:22px 20px;
+    margin-top:22px;
+    border:var(--card-border);
+    text-align:center;
+  }
+  .result-card img{
+    width:56px; height:56px;
+    object-fit:contain;
+    display:block;
+    margin:0 auto 10px;
+  }
+  .result-card .result-label{
+    font-size:13.5px;
+    color:var(--muted);
+    margin-bottom:4px;
+  }
+  .result-card .result-number{
+    font-family:'Zen Maru Gothic', sans-serif;
+    font-weight:700;
+    font-size:34px;
+    color:var(--text);
+    margin-bottom:2px;
+  }
+  .result-card .result-number .small{
+    font-size:16px;
+    font-weight:500;
+    margin-left:2px;
+  }
+  .result-card .result-sub{
+    font-size:13.5px;
+    color:var(--muted);
+    margin-top:6px;
+    line-height:1.6;
+  }
+  .result-card .result-winner{
+    font-family:'Zen Maru Gothic', sans-serif;
+    font-weight:700;
+    font-size:18px;
+    color:var(--text);
+    margin-bottom:10px;
+  }
+  .compare-lines{
+    text-align:left;
+    background:var(--bg);
+    border-radius:12px;
+    padding:12px 14px;
+    margin-top:12px;
+    font-size:14px;
+    line-height:1.9;
+  }
+  .compare-lines .win{ font-weight:700; color:var(--rose-dark); }
+
+  .error-box{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:var(--surface);
+    border:1px solid #E9C9C7;
+    border-radius:14px;
+    padding:12px 14px;
+    margin-top:14px;
+    font-size:13.5px;
+    color:var(--danger-text);
+    line-height:1.5;
+  }
+  .error-box img{ width:36px; height:36px; object-fit:contain; flex-shrink:0; }
+
+  /* ---- History ---- */
+  .history-section-label{
+    font-size:13px;
+    color:var(--muted);
+    margin:18px 4px 8px;
+  }
+  .history-item{
+    background:var(--surface);
+    border-radius:16px;
+    padding:14px 16px;
+    margin-bottom:8px;
+    border:var(--card-border);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .history-item .dot{ width:12px; height:12px; }
+  .history-item .hbody{ flex:1; }
+  .history-item .htitle{ font-size:14px; font-weight:700; }
+  .history-item .hsub{ font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .history-item .harrow{ color:var(--muted); flex-shrink:0; display:flex; }
+  .history-item .harrow svg{ width:16px; height:16px; }
+
+  .empty-hint{
+    text-align:center;
+    color:var(--muted);
+    font-size:14px;
+    margin-top:40px;
+    line-height:1.8;
+  }
+  .empty-hint img{ width:110px; height:auto; margin-bottom:8px; }
+
+  /* ---- Modal ---- */
+  .modal-backdrop{
+    position:fixed; inset:0;
+    background:rgba(58,53,50,0.35);
+    display:flex; align-items:flex-end;
+    z-index:20;
+  }
+  .modal-backdrop.hidden{ display:none; }
+  .modal-sheet{
+    background:var(--surface);
+    width:100%;
+    max-width:480px;
+    margin:0 auto;
+    border-radius:22px 22px 0 0;
+    padding:22px 20px 28px;
+    max-height:82vh;
+    overflow-y:auto;
+  }
+  .modal-sheet h2{
+    font-family:'Zen Maru Gothic', sans-serif;
+    font-size:17px;
+    margin:0 0 16px;
+  }
+  .help-content{
+    font-size:14.5px;
+    line-height:1.7;
+    color:var(--text);
+  }
+  .help-content p{ margin:0 0 14px; }
+  .help-content h3{
+    font-family:'Zen Maru Gothic', sans-serif;
+    font-size:16px;
+    margin:22px 0 10px;
+    padding-top:16px;
+    border-top:1px solid var(--divider);
+  }
+  .help-content .help-note{ font-size:13px; color:var(--muted); }
+  .about-panda{
+    display:block;
+    width:48px; height:48px;
+    object-fit:contain;
+    margin:0 auto 14px;
+  }
+  .modal-actions{ display:flex; gap:10px; }
+  .btn{
+    flex:1;
+    padding:13px;
+    border-radius:12px;
+    background:var(--bg);
+    color:var(--text);
+    border:1px solid var(--muted);
+    font-size:14px;
+    font-weight:700;
+    font-family:'Zen Maru Gothic', sans-serif;
+    cursor:pointer;
+  }
+  .btn:hover, .btn:active{
+    background:var(--rose);
+    border-color:var(--rose);
+  }
+
+  .settings-menu{ display:flex; flex-direction:column; }
+  .settings-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:transparent;
+    border:none;
+    text-align:left;
+    padding:14px 4px;
+    font-size:15px;
+    font-family:'Kosugi Maru',sans-serif;
+    color:var(--text);
+    cursor:pointer;
+    width:100%;
+  }
+  .settings-item .settings-icon{
+    font-size:17px; width:22px; flex-shrink:0; text-align:center;
+  }
+  .settings-divider{ height:1px; background:var(--divider); margin:4px 0; border:none; }
+
+  /* ---- 並び替え ---- */
+  .reorder-hint{
+    font-size:13px;
+    color:var(--muted);
+    margin-bottom:14px;
+    line-height:1.6;
+  }
+  .reorder-list{ margin-bottom:18px; }
+  .reorder-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--bg);
+    border:1px solid var(--divider);
+    border-radius:14px;
+    padding:12px 14px;
+    margin-bottom:8px;
+  }
+  .reorder-row .dot{ width:13px; height:13px; }
+  .reorder-row .name{ flex:1; font-size:14.5px; }
+  .reorder-btns{ display:flex; gap:4px; }
+  .reorder-btns button{
+    width:30px; height:30px;
+    border-radius:8px;
+    border:none;
+    background:transparent;
+    color:var(--text);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  .reorder-btns button:disabled{ opacity:0.3; cursor:default; }
+  .reorder-btns svg{ width:14px; height:14px; }
+
+  .reorder-row .dot{ cursor:pointer; }
+  .color-palette{
+    display:none;
+    flex-wrap:wrap;
+    gap:8px;
+    padding:10px 4px 2px;
+    margin:-4px 0 8px;
+    background:var(--bg);
+    border-radius:0 0 14px 14px;
+  }
+  .color-palette.open{ display:flex; }
+  .color-swatch{
+    width:24px; height:24px;
+    border-radius:50%;
+    cursor:pointer;
+    border:2px solid transparent;
+  }
+  .color-swatch.selected{
+    border-color:var(--text);
+  }
+  .color-swatch.used{
+    opacity:0.3;
+    cursor:default;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar" id="topbar"></header>
+  <main id="main"></main>
+
+  <div class="home-hero-fixed" id="homeHeroFixed" style="display:none;">
+    <img src="panda31.png" alt="">
+    今日は何を計算しよっか？
+  </div>
+
+  <div class="modal-backdrop hidden" id="modalBackdrop">
+    <div class="modal-sheet" id="modalSheet"></div>
+  </div>
+</div>
+
+<script>
+/* ====================== 機能定義 ====================== */
+const FEATURES = [
+  { id:"toilet",   name:"トイレットペーパー単価", color:"#BFD6E8" },
+  { id:"discount", name:"割引計算",               color:"#F0C9B0" },
+  { id:"compare",  name:"どっちがお得？",         color:"#E6B8BE" },
+  { id:"mentsuyu", name:"めんつゆ濃縮倍率",       color:"#C7B299" }
+];
+function featureById(id){ return FEATURES.find(f => f.id === id); }
+
+const COLOR_PALETTE = [
+  "#A37B68", "#C7B299", "#B8B2A9", "#F6CF68", "#F0C9B0",
+  "#E6B8BE", "#CDBFDD", "#BFD6E8", "#AEDFD1", "#A8BFA5"
+];
+function featureColor(f){ return state.colors[f.id] || f.color; }
+
+/* ====================== データ管理 ====================== */
+const ORDER_KEY = "tankaPandaOrder";
+const HISTORY_KEY = "tankaPandaHistory";
+const COLORS_KEY = "tankaPandaColors";
+const MAX_HISTORY_PER_FEATURE = 5;
+
+const OLD_COLOR_MIGRATION = {
+  "#A9D8C9": "#AEDFD1", // 旧ミント → 新ミント
+  "#F2D98A": "#F6CF68", // 旧イエロー → 新ハニー
+  "#C9BCE0": "#CDBFDD", // 旧パープル → 新ラベンダー
+  "#B8C9A8": "#A8BFA5"  // 旧グリーン → 新セージ
+};
+function loadColors(){
+  let c = null;
+  try{
+    const raw = localStorage.getItem(COLORS_KEY);
+    if(raw) c = JSON.parse(raw);
+  }catch(e){}
+  if(!c || typeof c !== "object") c = {};
+  let migrated = false;
+  Object.keys(c).forEach(id => {
+    const old = c[id];
+    if(OLD_COLOR_MIGRATION[old]){
+      c[id] = OLD_COLOR_MIGRATION[old];
+      migrated = true;
+    }
+  });
+  if(migrated){
+    try{ localStorage.setItem(COLORS_KEY, JSON.stringify(c)); }catch(e){}
+  }
+  return c;
+}
+function saveColors(){ localStorage.setItem(COLORS_KEY, JSON.stringify(state.colors)); }
+
+function loadOrder(){
+  let order = null;
+  try{
+    const raw = localStorage.getItem(ORDER_KEY);
+    if(raw) order = JSON.parse(raw);
+  }catch(e){}
+  if(!Array.isArray(order) || order.length !== FEATURES.length){
+    order = FEATURES.map(f => f.id);
+  }
+  return order;
+}
+function saveOrder(order){ localStorage.setItem(ORDER_KEY, JSON.stringify(order)); }
+
+function loadHistory(){
+  let h = null;
+  try{
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if(raw) h = JSON.parse(raw);
+  }catch(e){}
+  if(!h) h = {};
+  FEATURES.forEach(f => { if(!Array.isArray(h[f.id])) h[f.id] = []; });
+  return h;
+}
+function saveHistory(){ localStorage.setItem(HISTORY_KEY, JSON.stringify(state.history)); }
+function pushHistory(featureId, label, sub){
+  const entry = { label, sub, ts: Date.now() };
+  state.history[featureId].unshift(entry);
+  state.history[featureId] = state.history[featureId].slice(0, MAX_HISTORY_PER_FEATURE);
+  saveHistory();
+}
+
+const state = {
+  order: loadOrder(),
+  history: loadHistory(),
+  colors: loadColors(),
+  view: "home",       // "home" | "history" | featureId
+};
+
+/* ====================== ユーティリティ ====================== */
+function fmt(n, maxDigits){
+  if(maxDigits === undefined) maxDigits = 1;
+  if(!isFinite(n)) return "-";
+  const v = Math.round(n * Math.pow(10, maxDigits)) / Math.pow(10, maxDigits);
+  if(Number.isInteger(v)){
+    return v.toLocaleString("ja-JP");
+  }
+  return v.toLocaleString("ja-JP", { minimumFractionDigits: maxDigits, maximumFractionDigits: maxDigits });
+}
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+}
+function pandaImg(name){ return `<img src="${name}.png" alt="">`; }
+
+const ICONS = {
+  back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>`,
+  clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 16 14"></polyline></svg>`,
+  gear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`,
+  arrow: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`,
+  up: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
+  down: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
+  calculator: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2.5"></rect><line x1="8" y1="6.5" x2="16" y2="6.5"></line><line x1="8" y1="11" x2="8" y2="11"></line><line x1="12" y1="11" x2="12" y2="11"></line><line x1="16" y1="11" x2="16" y2="11"></line><line x1="8" y1="14.5" x2="8" y2="14.5"></line><line x1="12" y1="14.5" x2="12" y2="14.5"></line><line x1="16" y1="14.5" x2="16" y2="14.5"></line><line x1="8" y1="18" x2="8" y2="18"></line><line x1="12" y1="18" x2="12" y2="18"></line><line x1="16" y1="18" x2="16" y2="18"></line></svg>`
+};
+
+/* ====================== ルーター/描画 ====================== */
+const topbar = document.getElementById("topbar");
+const mainEl = document.getElementById("main");
+const homeHeroFixed = document.getElementById("homeHeroFixed");
+const modalBackdrop = document.getElementById("modalBackdrop");
+const modalSheet = document.getElementById("modalSheet");
+
+function goHome(){ state.view = "home"; render(); }
+function goFeature(id){ state.view = id; render(); }
+function goHistory(){ state.view = "history"; render(); }
+
+function render(){
+  homeHeroFixed.style.display = "none";
+
+  if(state.view === "home"){
+    renderTopbarHome();
+    renderHome();
+  }else if(state.view === "history"){
+    renderTopbarSub("計算履歴");
+    renderHistory();
+  }else{
+    const f = featureById(state.view);
+    document.documentElement.style.setProperty("--current-feature-color", featureColor(f));
+    renderTopbarSub(f.name);
+    renderFeature(f.id);
+  }
+  window.scrollTo(0,0);
+}
+
+function renderTopbarHome(){
+  topbar.innerHTML = `
+    <h1><span class="title-icon">${ICONS.calculator}</span>ちょい計算パンダ</h1>
+    <button class="iconbtn" id="historyBtn">${ICONS.clock}</button>
+    <button class="iconbtn" id="settingsBtn">${ICONS.gear}</button>
+  `;
+  document.getElementById("historyBtn").onclick = goHistory;
+  document.getElementById("settingsBtn").onclick = openSettingsModal;
+}
+function renderTopbarSub(title){
+  topbar.innerHTML = `
+    <button class="iconbtn back-btn" id="backBtn">${ICONS.back}</button>
+    <h1>${escapeHtml(title)}</h1>
+  `;
+  document.getElementById("backBtn").onclick = goHome;
+}
+
+/* ---- ホーム画面 ---- */
+function renderHome(){
+  const rows = state.order.map(id => {
+    const f = featureById(id);
+    return `
+      <div class="menu-card" data-id="${f.id}">
+        <span class="dot" style="background:${featureColor(f)}"></span>
+        <span class="name">${escapeHtml(f.name)}</span>
+        <span class="arrow">${ICONS.arrow}</span>
+      </div>
+    `;
+  }).join("");
+  mainEl.innerHTML = rows;
+  mainEl.querySelectorAll(".menu-card").forEach(el => {
+    el.addEventListener("click", () => goFeature(el.dataset.id));
+  });
+  homeHeroFixed.style.display = "block";
+}
+
+/* ---- 履歴画面 ---- */
+function renderHistory(){
+  let all = [];
+  FEATURES.forEach(f => {
+    state.history[f.id].forEach(h => all.push({ feature:f, ...h }));
+  });
+  all.sort((a,b) => b.ts - a.ts);
+
+  if(all.length === 0){
+    mainEl.innerHTML = `
+      <div class="empty-hint">
+        ${pandaImg("panda13")}
+        まだ計算履歴はないよ。<br>計算するとここに残るよ♪
+      </div>
+    `;
+    return;
+  }
+
+  mainEl.innerHTML = `
+    <div class="history-section-label">最近の計算（各機能5件まで保存）</div>
+    <div id="historyList"></div>
+  `;
+  const listEl = document.getElementById("historyList");
+  listEl.innerHTML = all.map((h,i) => `
+    <div class="history-item" data-idx="${i}">
+      <span class="dot" style="background:${featureColor(h.feature)}"></span>
+      <span class="hbody">
+        <span class="htitle">${escapeHtml(h.feature.name)}</span><br>
+        <span class="hsub">${escapeHtml(h.sub)}</span>
+      </span>
+      <span class="harrow">${ICONS.arrow}</span>
+    </div>
+  `).join("");
+  listEl.querySelectorAll(".history-item").forEach((el,i) => {
+    el.addEventListener("click", () => {
+      const h = all[i];
+      goFeature(h.feature.id);
+      // 少し遅らせて入力欄へ反映
+      setTimeout(() => applyHistoryInputs(h.feature.id, h), 0);
+    });
+  });
+}
+
+function applyHistoryInputs(featureId, entry){
+  if(!entry.inputs) return;
+  Object.keys(entry.inputs).forEach(key => {
+    const el = document.getElementById(key);
+    if(el) el.value = entry.inputs[key];
+  });
+}
+
+/* ====================== 各計算機能 ====================== */
+function renderFeature(id){
+  if(id === "toilet") return renderToilet();
+  if(id === "discount") return renderDiscount();
+  if(id === "compare") return renderCompare();
+  if(id === "mentsuyu") return renderMentsuyu();
+}
+
+function errorBox(msg){
+  return `<div class="error-box">${pandaImg("panda-41")}<span>${escapeHtml(msg)}</span></div>`;
+}
+function resultShell(inner){
+  return `<div class="result-card">${pandaImg("panda14")}${inner}</div>`;
+}
+
+function getNum(id){
+  const el = document.getElementById(id);
+  if(!el) return NaN;
+  const v = parseFloat(el.value);
+  return v;
+}
+
+/* ---- ① トイレットペーパー単価 ---- */
+function renderToilet(){
+  mainEl.innerHTML = `
+    <div class="calc-field">
+      <label>値段</label>
+      <div class="field-row">
+        <input type="number" inputmode="decimal" id="tp_price" placeholder="0">
+        <span class="unit">円</span>
+      </div>
+    </div>
+    <div class="calc-field">
+      <label>1ロールの長さ</label>
+      <div class="field-row">
+        <input type="number" inputmode="decimal" id="tp_length" placeholder="0">
+        <span class="unit">ｍ</span>
+      </div>
+    </div>
+    <div class="calc-field">
+      <label>ロール数</label>
+      <div class="field-row">
+        <input type="number" inputmode="decimal" id="tp_rolls" placeholder="0">
+        <span class="unit">個</span>
+      </div>
+    </div>
+    <button class="calc-btn" id="tp_calc">計算する</button>
+    <div id="tp_result"></div>
+  `;
+  document.getElementById("tp_calc").onclick = () => {
+    const price = getNum("tp_price"), length = getNum("tp_length"), rolls = getNum("tp_rolls");
+    const resEl = document.getElementById("tp_result");
+    if(!(price > 0) || !(length > 0) || !(rolls > 0)){
+      resEl.innerHTML = errorBox("値段・長さ・ロール数を、すべて0より大きい数字で入力してね。");
+      return;
+    }
+    const totalLength = length * rolls;
+    const per10m = price / totalLength * 10;
+    resEl.innerHTML = resultShell(`
+      <div class="result-label">すべての長さ ${fmt(totalLength)}ｍ</div>
+      <div class="result-number">${fmt(per10m)}<span class="small">円 / 10ｍ</span></div>
+      <div class="result-sub">10ｍあたり約${fmt(per10m)}円だよ</div>
+    `);
+    pushHistory("toilet",
+      `${fmt(per10m)}円/10ｍ`,
+      `${price}円・${length}ｍ・${rolls}個 → 10ｍあたり${fmt(per10m)}円`
+    );
+  };
+}
+
+/* ---- ② 割引計算 ---- */
+const discountModes = ["percent","yen","backPrice","backPercent"];
+const discountModeLabels = {
+  percent:"％OFFでいくら？",
+  yen:"○円引きでいくら？",
+  backPrice:"元の値段は？",
+  backPercent:"何％引き？"
+};
+let discountMode = "percent";
+
+function renderDiscount(){
+  mainEl.innerHTML = `
+    <div class="segment" id="dc_segment"></div>
+    <div id="dc_fields"></div>
+    <button class="calc-btn" id="dc_calc">計算する</button>
+    <div id="dc_result"></div>
+  `;
+  const seg = document.getElementById("dc_segment");
+  seg.innerHTML = discountModes.map(m =>
+    `<button data-mode="${m}" class="${m===discountMode?'active':''}">${discountModeLabels[m]}</button>`
+  ).join("");
+  seg.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      discountMode = btn.dataset.mode;
+      renderDiscount();
+    });
+  });
+  renderDiscountFields();
+  document.getElementById("dc_calc").onclick = calcDiscount;
+}
+
+function renderDiscountFields(){
+  const fields = document.getElementById("dc_fields");
+  if(discountMode === "percent"){
+    fields.innerHTML = `
+      <div class="calc-field"><label>元の値段</label>
+        <div class="field-row"><input type="number" inputmode="decimal" id="dc_price" placeholder="0"><span class="unit">円</span></div></div>
+      <div class="calc-field"><label>割引率</label>
+        <div class="field-row"><input type="number" inputmode="decimal" id="dc_rate" placeholder="0"><span class="unit">％OFF</span></div></div>
+    `;
+  }else if(discountMode === "yen"){
+    fields.innerHTML = `
+      <div class="calc-field"><label>元の値段</label>
+        <div class="field-row"><input type="number" inputmode="decimal" id="dc_price" placeholder="0"><span class="unit">円</span></div></div>
+      <div class="calc-field"><label>値引き額</label>
+        <div class="field-row"><input type="number" inputmode="decimal" id="dc_off" placeholder="0"><span class="unit">円引き</span></div></div>
+    `;
+  }else if(discountMode === "backPrice"){
+    fields.innerHTML = `
+      <div class="calc-field"><label>割引後の値段</label>
+        <div class="field-row"><input type="number" inputmode="decimal" id="dc_after" placeholder="0"><span class="unit">円</span></div></div>
+      <div class="calc-field"><label>割引率</label>
+        <div class="field-row"><input type="number" inputmode="decimal" id="dc_rate" placeholder="0"><span class="unit">％OFF</span></div></div>
+    `;
+  }else if(discountMode === "backPercent"){
+    fields.innerHTML = `
+      <div class="calc-field"><label>元の値段</label>
+        <div class="field-row"><input type="number" inputmode="decimal" id="dc_price" placeholder="0"><span class="unit">円</span></div></div>
+      <div class="calc-field"><label>割引後の値段</label>
+        <div class="field-row"><input type="number" inputmode="decimal" id="dc_after" placeholder="0"><span class="unit">円</span></div></div>
+    `;
+  }
+}
+
+function calcDiscount(){
+  const resEl = document.getElementById("dc_result");
+  if(discountMode === "percent"){
+    const price = getNum("dc_price"), rate = getNum("dc_rate");
+    if(!(price > 0) || !(rate >= 0)){ resEl.innerHTML = errorBox("元の値段と割引率を入力してね。"); return; }
+    const after = price * (1 - rate/100);
+    resEl.innerHTML = resultShell(`
+      <div class="result-label">割引後の値段</div>
+      <div class="result-number">${fmt(after)}<span class="small">円</span></div>
+      <div class="result-sub">${price}円の${rate}％OFFは${fmt(after)}円だよ</div>
+    `);
+    pushHistory("discount", `${fmt(after)}円`, `${price}円の${rate}％OFF → ${fmt(after)}円`);
+  }else if(discountMode === "yen"){
+    const price = getNum("dc_price"), off = getNum("dc_off");
+    if(!(price > 0) || !(off >= 0)){ resEl.innerHTML = errorBox("元の値段と値引き額を入力してね。"); return; }
+    const after = price - off;
+    resEl.innerHTML = resultShell(`
+      <div class="result-label">割引後の値段</div>
+      <div class="result-number">${fmt(after)}<span class="small">円</span></div>
+      <div class="result-sub">${price}円から${off}円引きで${fmt(after)}円だよ</div>
+    `);
+    pushHistory("discount", `${fmt(after)}円`, `${price}円から${off}円引き → ${fmt(after)}円`);
+  }else if(discountMode === "backPrice"){
+    const after = getNum("dc_after"), rate = getNum("dc_rate");
+    if(!(after > 0) || !(rate > 0) || rate >= 100){ resEl.innerHTML = errorBox("割引後の値段と、0〜100未満の割引率を入力してね。"); return; }
+    const price = after / (1 - rate/100);
+    resEl.innerHTML = resultShell(`
+      <div class="result-label">元の値段</div>
+      <div class="result-number">${fmt(price)}<span class="small">円</span></div>
+      <div class="result-sub">${rate}％OFFで${after}円なら、元は${fmt(price)}円だよ</div>
+    `);
+    pushHistory("discount", `元値${fmt(price)}円`, `${rate}％OFFで${after}円 → 元値${fmt(price)}円`);
+  }else if(discountMode === "backPercent"){
+    const price = getNum("dc_price"), after = getNum("dc_after");
+    if(!(price > 0) || !(after >= 0) || after > price){ resEl.innerHTML = errorBox("元の値段と割引後の値段を、正しい大小関係で入力してね。"); return; }
+    const rate = (1 - after/price) * 100;
+    resEl.innerHTML = resultShell(`
+      <div class="result-label">割引率</div>
+      <div class="result-number">${fmt(rate)}<span class="small">％OFF</span></div>
+      <div class="result-sub">${price}円 → ${after}円は、約${fmt(rate)}％OFFだよ</div>
+    `);
+    pushHistory("discount", `${fmt(rate)}％OFF`, `${price}円→${after}円 → 約${fmt(rate)}％OFF`);
+  }
+}
+
+/* ---- ③ どっちがお得？ ---- */
+const compareUnits = ["g","ml","個","枚","本","m"];
+const fullWidthLetter = { A:"Ａ", B:"Ｂ" };
+function compareProductFields(letter){
+  return `
+    <div class="section-label">【 商品${fullWidthLetter[letter]} 】</div>
+    <div class="calc-field"><label>価格</label>
+      <div class="field-row"><input type="number" inputmode="decimal" id="cp_price_${letter}" placeholder="0"><span class="unit">円</span></div></div>
+    <div class="calc-field"><label>内容量</label>
+      <div class="field-row">
+        <input type="number" inputmode="decimal" id="cp_qty_${letter}" placeholder="0">
+        <select class="unit-select" id="cp_unit_${letter}">${compareUnits.map(u=>`<option value="${u}">${u}</option>`).join("")}</select>
+      </div>
+    </div>
+    <div class="calc-field"><label>入り数（1つの中にいくつ入っているか・省略時は1）</label>
+      <div class="field-row"><input type="number" inputmode="decimal" id="cp_pack_${letter}" placeholder="1"><span class="unit">個</span></div></div>
+    <div class="calc-field"><label>セット数（省略時は1）</label>
+      <div class="field-row"><input type="number" inputmode="decimal" id="cp_set_${letter}" placeholder="1"><span class="unit">セット</span></div></div>
+  `;
+}
+function renderCompare(){
+  mainEl.innerHTML = `
+    ${compareProductFields("A")}
+    ${compareProductFields("B")}
+    <button class="calc-btn" id="cp_calc">比較する</button>
+    <div id="cp_result"></div>
+  `;
+  document.getElementById("cp_calc").onclick = calcCompare;
+}
+function compareUnitPrice(letter){
+  const price = getNum(`cp_price_${letter}`);
+  const qty = getNum(`cp_qty_${letter}`);
+  const packEl = document.getElementById(`cp_pack_${letter}`);
+  const setEl = document.getElementById(`cp_set_${letter}`);
+  const pack = packEl.value === "" ? 1 : parseFloat(packEl.value);
+  const set = setEl.value === "" ? 1 : parseFloat(setEl.value);
+  const unit = document.getElementById(`cp_unit_${letter}`).value;
+  if(!(price > 0) || !(qty > 0) || !(pack > 0) || !(set > 0)) return null;
+  const totalQty = qty * pack * set;
+  const unitPrice = price / totalQty;
+  return { price, qty, pack, set, unit, totalQty, unitPrice };
+}
+function calcCompare(){
+  const resEl = document.getElementById("cp_result");
+  const a = compareUnitPrice("A");
+  const b = compareUnitPrice("B");
+  if(!a || !b){
+    resEl.innerHTML = errorBox("商品A・Bどちらも、価格と内容量を0より大きい数字で入力してね。");
+    return;
+  }
+  if(a.unit !== b.unit){
+    resEl.innerHTML = errorBox("商品AとBの単位（g/ml/個など）をそろえてね。");
+    return;
+  }
+  const winner = a.unitPrice < b.unitPrice ? "A" : (b.unitPrice < a.unitPrice ? "B" : null);
+  const diffPct = winner ? Math.abs(1 - (winner==="A"? a.unitPrice/b.unitPrice : b.unitPrice/a.unitPrice)) * 100 : 0;
+  resEl.innerHTML = resultShell(`
+    <div class="result-winner">${winner ? `商品${fullWidthLetter[winner]}のほうがお得！` : "ＡとＢは同じ単価だよ"}</div>
+    <div class="compare-lines">
+      <div class="${winner==='A'?'win':''}">Ａ：1${a.unit}あたり ${fmt(a.unitPrice)}円</div>
+      <div class="${winner==='B'?'win':''}">Ｂ：1${b.unit}あたり ${fmt(b.unitPrice)}円</div>
+    </div>
+    ${winner ? `<div class="result-sub">商品${fullWidthLetter[winner]}のほうが約${fmt(diffPct)}%お得だよ</div>` : ``}
+  `);
+  pushHistory("compare",
+    winner ? `${fullWidthLetter[winner]}がお得` : "同額",
+    `Ａ:1${a.unit}${fmt(a.unitPrice)}円 / Ｂ:1${b.unit}${fmt(b.unitPrice)}円`
+  );
+}
+
+/* ---- ④ めんつゆ濃縮倍率 ---- */
+const concLevels = [
+  { value:"1", label:"ストレート" },
+  { value:"2", label:"2倍濃縮" },
+  { value:"3", label:"3倍濃縮" },
+  { value:"4", label:"4倍濃縮" },
+  { value:"5", label:"5倍濃縮" }
+];
+function concOptions(selected){
+  return concLevels.map(c => `<option value="${c.value}" ${c.value===selected?'selected':''}>${c.label}</option>`).join("");
+}
+function renderMentsuyu(){
+  mainEl.innerHTML = `
+    <div class="calc-field"><label>手元にある麺つゆ</label>
+      <div class="field-row"><select id="mt_mine">${concOptions("2")}</select></div></div>
+    <div class="calc-field"><label>レシピが指定する麺つゆ</label>
+      <div class="field-row"><select id="mt_recipe">${concOptions("1")}</select></div></div>
+    <div class="calc-field"><label>レシピの麺つゆ量</label>
+      <div class="field-row"><input type="number" inputmode="decimal" id="mt_amount" placeholder="0"><span class="unit">ml</span></div></div>
+    <button class="calc-btn" id="mt_calc">計算する</button>
+    <div id="mt_result"></div>
+  `;
+  document.getElementById("mt_calc").onclick = () => {
+    const mine = parseFloat(document.getElementById("mt_mine").value);
+    const recipe = parseFloat(document.getElementById("mt_recipe").value);
+    const amount = getNum("mt_amount");
+    const resEl = document.getElementById("mt_result");
+    if(!(amount > 0)){
+      resEl.innerHTML = errorBox("レシピの麺つゆ量を、0より大きい数字で入力してね。");
+      return;
+    }
+    const needed = amount * recipe / mine;
+    const mineLabel = concLevels.find(c=>c.value==String(mine)).label;
+    const recipeLabel = concLevels.find(c=>c.value==String(recipe)).label;
+    resEl.innerHTML = resultShell(`
+      <div class="result-label">${mineLabel}で必要な量</div>
+      <div class="result-number">${fmt(needed)}<span class="small">ml</span></div>
+      <div class="result-sub">レシピは${recipeLabel}${amount}ml → ${mineLabel}なら${fmt(needed)}mlだよ</div>
+    `);
+    pushHistory("mentsuyu", `${fmt(needed)}ml`, `${recipeLabel}${amount}ml → ${mineLabel}${fmt(needed)}ml`);
+  };
+}
+
+/* ====================== モーダル: 設定 ====================== */
+function openSettingsModal(){
+  modalSheet.innerHTML = `
+    <h2>⚙️ 設定</h2>
+    <div class="settings-menu">
+      <button class="settings-item" id="menuHelpBtn"><span class="settings-icon">📖</span>使い方ガイド</button>
+      <button class="settings-item" id="menuReorderBtn"><span class="settings-icon">↕️</span>並び替え</button>
+      <hr class="settings-divider">
+      <button class="settings-item" id="menuAboutBtn"><span class="settings-icon">ℹ️</span>このアプリについて</button>
+    </div>
+    <div class="modal-actions"><button class="btn" id="settingsCloseBtn">閉じる</button></div>
+  `;
+  modalBackdrop.classList.remove("hidden");
+  document.getElementById("menuHelpBtn").onclick = openHelpModal;
+  document.getElementById("menuReorderBtn").onclick = openReorderModal;
+  document.getElementById("menuAboutBtn").onclick = openAboutModal;
+  document.getElementById("settingsCloseBtn").onclick = closeModal;
+}
+
+function openHelpModal(){
+  modalSheet.innerHTML = `
+    <h2>📖 使い方ガイド</h2>
+    <div class="help-content">
+      <p>🐼 このアプリは、お買い物や毎日の暮らしでちょっと悩む計算を、パンダが代わりにやってくれるアプリです。</p>
+      <p>①トイレットペーパー単価、②割引計算、③どっちがお得？、④めんつゆ濃縮倍率の4つが使えます。</p>
+      <p>それぞれの画面で数字を入れて「計算する」を押すだけ！メニューはホーム画面のリストから選べます。</p>
+      <h3>🔍 各機能について</h3>
+      <p><b>トイレットペーパー単価</b><br>10ｍあたりの値段がわかると、商品ごとの本当のお得度を比べやすいよ</p>
+      <p><b>割引計算</b><br>値札やセールで一部の情報しかわからない時、残りを逆算できるよ</p>
+      <p><b>どっちがお得？</b><br>内容量が違う商品でも、実際どちらが安いかすぐわかるよ</p>
+      <p><b>めんつゆ濃縮倍率</b><br>レシピと違う濃さの麺つゆしかない時、必要な量に変換できるよ</p>
+      <p>🕐（時計マーク）から、直近の計算履歴を見られます。各機能ごとに新しいものから5件まで残ります。タップすると入力欄に呼び戻せます。</p>
+      <p>データはご自身のスマホの中だけに保存され、他の人と共有されることはありません。</p>
+      <h3>📱 ホーム画面に追加する方法</h3>
+      <p><b>【iPhoneの場合】</b><br>
+      ① Safariでこのページを開く<br>
+      ② 下の「共有」ボタンをタップ<br>
+      ③ 「ホーム画面に追加」を選ぶ<br>
+      ④ 右上の「追加」をタップして完了</p>
+      <p><b>【Androidの場合】</b><br>
+      ① Chromeでこのページを開く<br>
+      ② 右上の「⋮」をタップ<br>
+      ③ 「ホーム画面に追加」または「アプリをインストール」を選ぶ</p>
+      <p class="help-note">※ このアプリは今後もこっそり機能が増えることがあります。次に開いたときに、新しい計算メニューが増えているかも♪</p>
+    </div>
+    <div class="modal-actions"><button class="btn" id="helpCloseBtn">閉じる</button></div>
+  `;
+  document.getElementById("helpCloseBtn").onclick = closeModal;
+}
+
+function openAboutModal(){
+  modalSheet.innerHTML = `
+    <h2>ℹ️ このアプリについて</h2>
+    <div class="help-content">
+      ${pandaImg("panda20").replace('<img', '<img class="about-panda"')}
+      <p>「単価計算パンダ」は、お買い物や日々の暮らしで「これ電卓叩くの面倒だな」をサクッと解消する計算アプリです。</p>
+      <p>データはご自身のスマホの中だけに保存され、外部に送信されることはありません。</p>
+    </div>
+    <div class="modal-actions"><button class="btn" id="aboutCloseBtn">閉じる</button></div>
+  `;
+  document.getElementById("aboutCloseBtn").onclick = closeModal;
+}
+
+/* ---- 並び替え ---- */
+function openReorderModal(){
+  renderReorderModal();
+  modalBackdrop.classList.remove("hidden");
+}
+let openColorPaletteId = null;
+function renderReorderModal(){
+  const rows = state.order.map((id, i) => {
+    const f = featureById(id);
+    const isOpen = openColorPaletteId === id;
+    const usedColors = state.order
+      .filter(otherId => otherId !== id)
+      .map(otherId => featureColor(featureById(otherId)));
+    const swatches = COLOR_PALETTE.map(c => {
+      const isSelected = featureColor(f) === c;
+      const isUsed = !isSelected && usedColors.includes(c);
+      return `
+      <span class="color-swatch ${isSelected ? 'selected':''} ${isUsed ? 'used':''}" data-id="${id}" data-color="${c}" data-used="${isUsed}" style="background:${c}"></span>
+    `;
+    }).join("");
+    return `
+      <div class="reorder-row">
+        <span class="dot" data-id="${id}" style="background:${featureColor(f)}"></span>
+        <span class="name">${escapeHtml(f.name)}</span>
+        <span class="reorder-btns">
+          <button data-dir="up" data-idx="${i}" ${i===0?'disabled':''}>${ICONS.up}</button>
+          <button data-dir="down" data-idx="${i}" ${i===state.order.length-1?'disabled':''}>${ICONS.down}</button>
+        </span>
+      </div>
+      <div class="color-palette ${isOpen?'open':''}">${swatches}</div>
+    `;
+  }).join("");
+  modalSheet.innerHTML = `
+    <h2>↕️ 並び替え</h2>
+    <div class="reorder-hint">よく使うものが上に来るように、ホーム画面の順番を変えられます。ドットをタップすると色も変えられるよ。</div>
+    <div class="reorder-list">${rows}</div>
+    <div class="modal-actions"><button class="btn" id="reorderCloseBtn">閉じる</button></div>
+  `;
+  modalSheet.querySelectorAll(".reorder-btns button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      const dir = btn.dataset.dir;
+      const target = dir === "up" ? idx - 1 : idx + 1;
+      if(target < 0 || target >= state.order.length) return;
+      const arr = state.order;
+      [arr[idx], arr[target]] = [arr[target], arr[idx]];
+      saveOrder(arr);
+      renderReorderModal();
+    });
+  });
+  modalSheet.querySelectorAll(".reorder-row .dot").forEach(dot => {
+    dot.addEventListener("click", () => {
+      const id = dot.dataset.id;
+      openColorPaletteId = (openColorPaletteId === id) ? null : id;
+      renderReorderModal();
+    });
+  });
+  modalSheet.querySelectorAll(".color-swatch").forEach(sw => {
+    sw.addEventListener("click", () => {
+      if(sw.dataset.used === "true") return;
+      const id = sw.dataset.id;
+      state.colors[id] = sw.dataset.color;
+      saveColors();
+      renderReorderModal();
+    });
+  });
+  document.getElementById("reorderCloseBtn").onclick = () => { closeModal(); if(state.view==="home") renderHome(); };
+}
+
+function closeModal(){ modalBackdrop.classList.add("hidden"); }
+modalBackdrop.addEventListener("click", e => { if(e.target === modalBackdrop) closeModal(); });
+
+/* ====================== 初期化 ====================== */
+render();
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("service-worker.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
