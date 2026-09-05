@@ -494,6 +494,144 @@
     opacity:0.3;
     cursor:default;
   }
+
+  /* ---- たいきんパンダ：リストUI ---- */
+  .tk-add-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--surface);
+    border-radius:16px;
+    padding:6px 8px 6px 16px;
+    border:var(--card-border);
+    margin-bottom:16px;
+  }
+  .tk-add-row input{
+    flex:1;
+    border:none;
+    outline:none;
+    font-size:15px;
+    padding:10px 0;
+    background:transparent;
+    font-family:'Kosugi Maru',sans-serif;
+    color:var(--text);
+  }
+  .tk-add-row input::placeholder{ color:var(--muted); }
+  .tk-add-row button{
+    width:36px; height:36px;
+    border-radius:50%;
+    border:none;
+    background:var(--current-feature-color, #D4537E);
+    color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .tk-add-row button svg{ width:18px; height:18px; }
+  .tk-item{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--surface);
+    border-radius:16px;
+    padding:13px 14px;
+    margin-bottom:8px;
+    border:var(--card-border);
+  }
+  .tk-item.checked{ opacity:0.55; }
+  .tk-item.checked .tk-text{ text-decoration:line-through; color:var(--muted); }
+  .tk-checkbox{
+    width:24px; height:24px;
+    border-radius:50%;
+    border:2px solid var(--divider);
+    flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    background:var(--bg);
+  }
+  .tk-checkbox.on{
+    background:var(--current-feature-color, #D4537E);
+    border-color:var(--current-feature-color, #D4537E);
+  }
+  .tk-checkbox svg{ width:13px; height:13px; opacity:0; }
+  .tk-checkbox.on svg{ opacity:1; }
+  .tk-text{
+    flex:1;
+    font-size:14.5px;
+    line-height:1.5;
+    word-break:break-word;
+  }
+  .tk-remove{
+    border:none; background:none;
+    color:var(--muted);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    flex-shrink:0;
+    padding:4px;
+  }
+  .tk-remove svg{ width:16px; height:16px; }
+  .tk-progress{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:13px;
+    color:var(--muted);
+    margin:2px 2px 12px;
+  }
+  .tk-taikin-btn{
+    width:100%;
+    padding:15px;
+    border-radius:16px;
+    background:#33302C;
+    color:#fff;
+    border:none;
+    font-size:15px;
+    font-weight:700;
+    font-family:'Zen Maru Gothic', sans-serif;
+    cursor:pointer;
+    margin-top:6px;
+  }
+  .tk-taikin-sub{
+    text-align:center;
+    font-size:12px;
+    color:var(--muted);
+    margin-top:8px;
+  }
+  .tk-history-item{
+    background:var(--surface);
+    border-radius:16px;
+    padding:14px 16px;
+    margin-bottom:8px;
+    border:var(--card-border);
+  }
+  .tk-history-item .tk-hdate{
+    font-weight:700;
+    font-size:14px;
+    font-family:'Zen Maru Gothic', sans-serif;
+    margin-bottom:4px;
+  }
+  .tk-history-item .tk-hsub{
+    font-size:12.5px;
+    color:var(--muted);
+    line-height:1.7;
+  }
+  .tk-toast{
+    position:fixed;
+    left:50%;
+    bottom:100px;
+    transform:translateX(-50%) translateY(10px);
+    background:#33302C;
+    color:#fff;
+    padding:11px 20px;
+    border-radius:20px;
+    font-size:13.5px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .25s, transform .25s;
+    white-space:nowrap;
+    z-index:30;
+  }
+  .tk-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -502,13 +640,14 @@
   <main id="main"></main>
 
   <div class="home-hero-fixed" id="homeHeroFixed" style="display:none;">
-    <img src="panda31.png" alt="">
-    今日は何を計算しよっか？
+    <div id="heroTap" style="cursor:pointer; display:inline-block; pointer-events:auto;"></div>
   </div>
 
   <div class="modal-backdrop hidden" id="modalBackdrop">
     <div class="modal-sheet" id="modalSheet"></div>
   </div>
+
+  <div class="tk-toast" id="tkToast"></div>
 </div>
 
 <script>
@@ -592,12 +731,107 @@ function pushHistory(featureId, label, sub){
   saveHistory();
 }
 
+/* ====================== たいきんパンダ：機能定義・データ管理 ====================== */
+const MODE_KEY = "tankaPandaMode";
+const TAIKIN_KEY = "taikinPandaData";
+const MAX_DAYLOG = 30;
+const MAX_STOCK_HISTORY = 30;
+
+const TK_FEATURES = [
+  { id:"tk_daily", name:"毎日のタスク", color:"#AEDFD1" },
+  { id:"tk_today", name:"今日だけのタスク", color:"#F0C9B0" },
+  { id:"tk_stock", name:"備品リスト", color:"#CDBFDD" }
+];
+function tkFeatureById(id){ return TK_FEATURES.find(f => f.id === id); }
+
+function loadMode(){
+  const m = localStorage.getItem(MODE_KEY);
+  return m === "taikin" ? "taikin" : "calc";
+}
+function saveMode(m){ localStorage.setItem(MODE_KEY, m); }
+
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function tkGenId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function defaultTaikinData(){
+  return {
+    lastDate: todayStr(),
+    dailyItems: [],
+    todayItems: [],
+    stockItems: [],
+    stockHistory: [],
+    dayLog: []
+  };
+}
+function loadTaikinData(){
+  let d = null;
+  try{
+    const raw = localStorage.getItem(TAIKIN_KEY);
+    if(raw) d = JSON.parse(raw);
+  }catch(e){}
+  if(!d) d = defaultTaikinData();
+  if(!Array.isArray(d.dailyItems)) d.dailyItems = [];
+  if(!Array.isArray(d.todayItems)) d.todayItems = [];
+  if(!Array.isArray(d.stockItems)) d.stockItems = [];
+  if(!Array.isArray(d.stockHistory)) d.stockHistory = [];
+  if(!Array.isArray(d.dayLog)) d.dayLog = [];
+  return d;
+}
+function saveTaikinData(){ localStorage.setItem(TAIKIN_KEY, JSON.stringify(state.taikin)); }
+
+// 前日分をログに残しつつ、毎日／今日だけタスクをリセットする
+function tkLogAndReset(){
+  const t = state.taikin;
+  const dailyTotal = t.dailyItems.length;
+  const dailyDone = t.dailyItems.filter(i=>i.checked).length;
+  const todayTotal = t.todayItems.length;
+  const todayDone = t.todayItems.filter(i=>i.checked).length;
+
+  if(dailyTotal + todayTotal > 0){
+    const entry = {
+      date: t.lastDate,
+      dailyDone, dailyTotal,
+      todayDone, todayTotal,
+      todayList: t.todayItems.map(i => ({ text:i.text, checked:i.checked }))
+    };
+    t.dayLog = t.dayLog.filter(e => e.date !== t.lastDate);
+    t.dayLog.unshift(entry);
+    t.dayLog = t.dayLog.slice(0, MAX_DAYLOG);
+  }
+
+  t.dailyItems = t.dailyItems.map(i => ({ ...i, checked:false }));
+  t.todayItems = [];
+  t.lastDate = todayStr();
+  saveTaikinData();
+}
+function tkCheckAutoReset(){
+  if(state.taikin.lastDate !== todayStr()){
+    tkLogAndReset();
+  }
+}
+
+function tkToast(msg){
+  const el = document.getElementById("tkToast");
+  if(!el) return;
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(tkToast._t);
+  tkToast._t = setTimeout(()=>el.classList.remove("show"), 1600);
+}
+
 const state = {
   order: loadOrder(),
   history: loadHistory(),
   colors: loadColors(),
-  view: "home",       // "home" | "history" | featureId
+  mode: loadMode(),    // "calc" | "taikin"
+  taikin: loadTaikinData(),
+  view: "home",       // "home" | "history" | featureId | tk_history | tk_daily | tk_today | tk_stock
 };
+tkCheckAutoReset();
+setInterval(tkCheckAutoReset, 60000);
 
 /* ====================== ユーティリティ ====================== */
 function fmt(n, maxDigits){
@@ -621,7 +855,10 @@ const ICONS = {
   arrow: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`,
   up: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
   down: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
-  calculator: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2.5"></rect><line x1="8" y1="6.5" x2="16" y2="6.5"></line><line x1="8" y1="11" x2="8" y2="11"></line><line x1="12" y1="11" x2="12" y2="11"></line><line x1="16" y1="11" x2="16" y2="11"></line><line x1="8" y1="14.5" x2="8" y2="14.5"></line><line x1="12" y1="14.5" x2="12" y2="14.5"></line><line x1="16" y1="14.5" x2="16" y2="14.5"></line><line x1="8" y1="18" x2="8" y2="18"></line><line x1="12" y1="18" x2="12" y2="18"></line><line x1="16" y1="18" x2="16" y2="18"></line></svg>`
+  calculator: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2.5"></rect><line x1="8" y1="6.5" x2="16" y2="6.5"></line><line x1="8" y1="11" x2="8" y2="11"></line><line x1="12" y1="11" x2="12" y2="11"></line><line x1="16" y1="11" x2="16" y2="11"></line><line x1="8" y1="14.5" x2="8" y2="14.5"></line><line x1="12" y1="14.5" x2="12" y2="14.5"></line><line x1="16" y1="14.5" x2="16" y2="14.5"></line><line x1="8" y1="18" x2="8" y2="18"></line><line x1="12" y1="18" x2="12" y2="18"></line><line x1="16" y1="18" x2="16" y2="18"></line></svg>`,
+  checklist: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11"></path><path d="M9 12h11"></path><path d="M9 18h11"></path><path d="M4 6.2l1.2 1.2L7.4 5"></path><path d="M4 12.2l1.2 1.2L7.4 11"></path><path d="M4 18.2l1.2 1.2L7.4 17"></path></svg>`,
+  plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`,
+  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>`
 };
 
 /* ====================== ルーター/描画 ====================== */
@@ -633,17 +870,34 @@ const modalSheet = document.getElementById("modalSheet");
 
 function goHome(){ state.view = "home"; render(); }
 function goFeature(id){ state.view = id; render(); }
-function goHistory(){ state.view = "history"; render(); }
+function goHistory(){ state.view = (state.mode === "taikin") ? "tk_history" : "history"; render(); }
+
+function toggleMode(){
+  state.mode = (state.mode === "calc") ? "taikin" : "calc";
+  saveMode(state.mode);
+  state.view = "home";
+  render();
+}
 
 function render(){
   homeHeroFixed.style.display = "none";
+  document.documentElement.style.setProperty("--current-feature-color", "");
 
   if(state.view === "home"){
     renderTopbarHome();
-    renderHome();
+    if(state.mode === "taikin"){ renderTaikinHome(); }else{ renderHome(); }
+    renderHeroTap();
   }else if(state.view === "history"){
     renderTopbarSub("計算履歴");
     renderHistory();
+  }else if(state.view === "tk_history"){
+    renderTopbarSub("記録");
+    renderTkHistory();
+  }else if(String(state.view).indexOf("tk_") === 0){
+    const f = tkFeatureById(state.view);
+    document.documentElement.style.setProperty("--current-feature-color", f.color);
+    renderTopbarSub(f.name);
+    renderTkFeature(f.id);
   }else{
     const f = featureById(state.view);
     document.documentElement.style.setProperty("--current-feature-color", featureColor(f));
@@ -653,14 +907,35 @@ function render(){
   window.scrollTo(0,0);
 }
 
+function renderHeroTap(){
+  const tap = document.getElementById("heroTap");
+  if(!tap) return;
+  if(state.mode === "calc"){
+    tap.innerHTML = `<img src="panda31.png" alt="" style="width:118px;height:118px;object-fit:contain;display:block;margin:0 auto 4px;">今日は何を計算しよっか？`;
+  }else{
+    tap.innerHTML = `<img src="panda-39.png" alt="" style="width:118px;height:118px;object-fit:contain;display:block;margin:0 auto 4px;">今日も1日お疲れさま♪`;
+  }
+  tap.onclick = toggleMode;
+}
+
 function renderTopbarHome(){
-  topbar.innerHTML = `
-    <h1><span class="title-icon">${ICONS.calculator}</span>ちょい計算パンダ</h1>
-    <button class="iconbtn" id="historyBtn">${ICONS.clock}</button>
-    <button class="iconbtn" id="settingsBtn">${ICONS.gear}</button>
-  `;
+  if(state.mode === "taikin"){
+    topbar.innerHTML = `
+      <h1><span class="title-icon" style="color:#D4537E;">${ICONS.checklist}</span>たいきんパンダ</h1>
+      <button class="iconbtn" id="historyBtn">${ICONS.clock}</button>
+      <button class="iconbtn" id="settingsBtn">${ICONS.gear}</button>
+    `;
+  }else{
+    topbar.innerHTML = `
+      <h1><span class="title-icon">${ICONS.calculator}</span>ちょい計算パンダ</h1>
+      <button class="iconbtn" id="historyBtn">${ICONS.clock}</button>
+      <button class="iconbtn" id="settingsBtn">${ICONS.gear}</button>
+    `;
+  }
   document.getElementById("historyBtn").onclick = goHistory;
-  document.getElementById("settingsBtn").onclick = openSettingsModal;
+  document.getElementById("settingsBtn").onclick = () => {
+    if(state.mode === "taikin") openTaikinSettingsModal(); else openSettingsModal();
+  };
 }
 function renderTopbarSub(title){
   topbar.innerHTML = `
@@ -730,6 +1005,244 @@ function renderHistory(){
       setTimeout(() => applyHistoryInputs(h.feature.id, h), 0);
     });
   });
+}
+
+/* ====================== たいきんパンダ：ホーム ====================== */
+function renderTaikinHome(){
+  const rows = TK_FEATURES.map(f => `
+    <div class="menu-card" data-id="${f.id}">
+      <span class="dot" style="background:${f.color}"></span>
+      <span class="name">${escapeHtml(f.name)}</span>
+      <span class="arrow">${ICONS.arrow}</span>
+    </div>
+  `).join("");
+  mainEl.innerHTML = `
+    ${rows}
+    <button class="tk-taikin-btn" id="tkTaikinBtn">🐼 退勤する（チェックをリセット）</button>
+    <div class="tk-taikin-sub">押すと今日の記録を残して、毎日／今日だけのタスクがリセットされるよ</div>
+  `;
+  mainEl.querySelectorAll(".menu-card").forEach(el => {
+    el.addEventListener("click", () => goFeature(el.dataset.id));
+  });
+  document.getElementById("tkTaikinBtn").onclick = () => {
+    tkLogAndReset();
+    render();
+    tkToast("お疲れさま！また明日🐼");
+  };
+  homeHeroFixed.style.display = "block";
+}
+
+/* ====================== たいきんパンダ：各リスト画面 ====================== */
+function tkCheckSvg(){
+  return `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12.5L9.5 18L20 6" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function renderTkFeature(id){
+  if(id === "tk_daily") return renderTkList("daily");
+  if(id === "tk_today") return renderTkList("today");
+  if(id === "tk_stock") return renderTkStock();
+}
+
+function renderTkList(kind){
+  const key = kind === "daily" ? "dailyItems" : "todayItems";
+  const items = state.taikin[key];
+  const placeholder = kind === "daily" ? "毎日やることを追加" : "今日だけの用事を追加";
+
+  const total = items.length;
+  const done = items.filter(i=>i.checked).length;
+
+  mainEl.innerHTML = `
+    <div class="tk-add-row">
+      <input type="text" id="tkInput" placeholder="${placeholder}" maxlength="60">
+      <button id="tkAddBtn">${ICONS.plus}</button>
+    </div>
+    <div class="tk-progress"><span>${total===0?'':`${done}/${total} 完了`}</span></div>
+    <div id="tkList"></div>
+  `;
+
+  function draw(){
+    const list = state.taikin[key];
+    const listEl = document.getElementById("tkList");
+    if(list.length === 0){
+      listEl.innerHTML = `<div class="empty-hint" style="margin-top:16px;">まだ項目がないよ。上の欄から追加してね。</div>`;
+    }else{
+      listEl.innerHTML = list.map(item => `
+        <div class="tk-item ${item.checked?'checked':''}" data-id="${item.id}">
+          <div class="tk-checkbox ${item.checked?'on':''}" data-act="toggle">${tkCheckSvg()}</div>
+          <span class="tk-text">${escapeHtml(item.text)}</span>
+          <button class="tk-remove" data-act="remove">${ICONS.trash}</button>
+        </div>
+      `).join("");
+      listEl.querySelectorAll(".tk-item").forEach(row => {
+        const id = row.dataset.id;
+        row.querySelector('[data-act="toggle"]').addEventListener("click", () => {
+          const item = state.taikin[key].find(i=>i.id===id);
+          item.checked = !item.checked;
+          saveTaikinData();
+          const doneNow = state.taikin[key].filter(i=>i.checked).length;
+          mainEl.querySelector(".tk-progress span").textContent = `${doneNow}/${state.taikin[key].length} 完了`;
+          draw();
+        });
+        row.querySelector('[data-act="remove"]').addEventListener("click", () => {
+          state.taikin[key] = state.taikin[key].filter(i=>i.id!==id);
+          saveTaikinData();
+          const t2 = state.taikin[key].length;
+          const d2 = state.taikin[key].filter(i=>i.checked).length;
+          mainEl.querySelector(".tk-progress span").textContent = t2===0?'':`${d2}/${t2} 完了`;
+          draw();
+        });
+      });
+    }
+  }
+  draw();
+
+  document.getElementById("tkAddBtn").onclick = addTk;
+  document.getElementById("tkInput").addEventListener("keydown", e => { if(e.key==="Enter") addTk(); });
+  function addTk(){
+    const input = document.getElementById("tkInput");
+    const v = input.value.trim();
+    if(!v) return;
+    state.taikin[key].push({ id: tkGenId(), text:v, checked:false });
+    input.value = "";
+    saveTaikinData();
+    const t2 = state.taikin[key].length;
+    const d2 = state.taikin[key].filter(i=>i.checked).length;
+    mainEl.querySelector(".tk-progress span").textContent = `${d2}/${t2} 完了`;
+    draw();
+  }
+}
+
+function renderTkStock(){
+  mainEl.innerHTML = `
+    <div class="tk-add-row">
+      <input type="text" id="tkStockInput" placeholder="必要な備品を追加（例：ゴミ袋、コーヒー）" maxlength="60">
+      <button id="tkStockAddBtn">${ICONS.plus}</button>
+    </div>
+    <div id="tkStockList"></div>
+    <div class="section-label" id="tkStockHistLabel" style="display:none;">購入履歴</div>
+    <div id="tkStockHistList"></div>
+  `;
+
+  function draw(){
+    const items = state.taikin.stockItems;
+    const listEl = document.getElementById("tkStockList");
+    if(items.length === 0){
+      listEl.innerHTML = `<div class="empty-hint" style="margin-top:16px;">今のところ必要な備品はないよ。</div>`;
+    }else{
+      listEl.innerHTML = items.map(item => `
+        <div class="tk-item" data-id="${item.id}">
+          <div class="tk-checkbox" data-act="buy">${tkCheckSvg()}</div>
+          <span class="tk-text">${escapeHtml(item.text)}</span>
+          <button class="tk-remove" data-act="remove">${ICONS.trash}</button>
+        </div>
+      `).join("");
+      listEl.querySelectorAll(".tk-item").forEach(row => {
+        const id = row.dataset.id;
+        row.querySelector('[data-act="buy"]').addEventListener("click", () => {
+          const idx = state.taikin.stockItems.findIndex(i=>i.id===id);
+          if(idx === -1) return;
+          const item = state.taikin.stockItems[idx];
+          state.taikin.stockItems.splice(idx,1);
+          state.taikin.stockHistory.unshift({ id: tkGenId(), text:item.text, date: todayStr() });
+          state.taikin.stockHistory = state.taikin.stockHistory.slice(0, MAX_STOCK_HISTORY);
+          saveTaikinData();
+          tkToast("購入済みにしたよ");
+          draw();
+        });
+        row.querySelector('[data-act="remove"]').addEventListener("click", () => {
+          state.taikin.stockItems = state.taikin.stockItems.filter(i=>i.id!==id);
+          saveTaikinData();
+          draw();
+        });
+      });
+    }
+
+    const hist = state.taikin.stockHistory;
+    const histLabel = document.getElementById("tkStockHistLabel");
+    const histList = document.getElementById("tkStockHistList");
+    if(hist.length === 0){
+      histLabel.style.display = "none";
+      histList.innerHTML = "";
+    }else{
+      histLabel.style.display = "block";
+      histList.innerHTML = hist.map(h => `
+        <div class="tk-history-item">
+          <div class="tk-hdate">${escapeHtml(h.text)}</div>
+          <div class="tk-hsub">${escapeHtml(h.date)} に購入済み</div>
+        </div>
+      `).join("");
+    }
+  }
+  draw();
+
+  document.getElementById("tkStockAddBtn").onclick = addStock;
+  document.getElementById("tkStockInput").addEventListener("keydown", e => { if(e.key==="Enter") addStock(); });
+  function addStock(){
+    const input = document.getElementById("tkStockInput");
+    const v = input.value.trim();
+    if(!v) return;
+    state.taikin.stockItems.push({ id: tkGenId(), text:v });
+    input.value = "";
+    saveTaikinData();
+    draw();
+  }
+}
+
+/* ====================== たいきんパンダ：記録（履歴） ====================== */
+function renderTkHistory(){
+  const log = state.taikin.dayLog;
+  if(log.length === 0){
+    mainEl.innerHTML = `
+      <div class="empty-hint">
+        ${pandaImg("panda13")}
+        まだ記録はないよ。<br>「退勤する」を押すか、日付が変わると残るよ♪
+      </div>
+    `;
+    return;
+  }
+  mainEl.innerHTML = `
+    <div class="history-section-label">直近${log.length}日分の記録（最大${MAX_DAYLOG}日分）</div>
+    <div id="tkHistList"></div>
+  `;
+  document.getElementById("tkHistList").innerHTML = log.map(e => {
+    const todaySub = e.todayTotal > 0
+      ? `今日だけ：${e.todayDone}/${e.todayTotal} 完了（${e.todayList.map(t=>escapeHtml(t.text)+(t.checked?'✓':'')).join('、')}）`
+      : `今日だけ：追加なし`;
+    return `
+      <div class="tk-history-item">
+        <div class="tk-hdate">${escapeHtml(e.date)}</div>
+        <div class="tk-hsub">毎日：${e.dailyDone}/${e.dailyTotal} 完了<br>${todaySub}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+/* ====================== たいきんパンダ：設定 ====================== */
+function openTaikinSettingsModal(){
+  modalSheet.innerHTML = `
+    <h2>⚙️ 設定</h2>
+    <div class="settings-menu">
+      <button class="settings-item" id="tkHelpBtn"><span class="settings-icon">📖</span>使い方ガイド</button>
+    </div>
+    <div class="modal-actions"><button class="btn" id="tkSettingsCloseBtn">閉じる</button></div>
+  `;
+  modalBackdrop.classList.remove("hidden");
+  document.getElementById("tkHelpBtn").onclick = () => {
+    modalSheet.innerHTML = `
+      <h2>📖 使い方ガイド</h2>
+      <div class="help-content">
+        <p>🐼 退勤前にやることをチェックできるリストだよ。</p>
+        <p><b>毎日のタスク</b><br>登録しておくと、日付が変わると自動でチェックがリセットされるよ。</p>
+        <p><b>今日だけのタスク</b><br>その日だけ必要な用事をサッと追加できるよ。こちらも日付が変わるとリセットされるよ。</p>
+        <p><b>備品リスト</b><br>買っておきたい消耗品などをためておくリスト。チェックすると「購入履歴」に日付付きで残るよ。</p>
+        <p>🕐（時計マーク）から、過去の「毎日／今日だけ」の達成記録を振り返れます。</p>
+        <p>画面下のパンダをタップすると「ちょい計算パンダ」に切り替わるよ。</p>
+      </div>
+      <div class="modal-actions"><button class="btn" id="tkHelpCloseBtn">閉じる</button></div>
+    `;
+    document.getElementById("tkHelpCloseBtn").onclick = closeModal;
+  };
+  document.getElementById("tkSettingsCloseBtn").onclick = closeModal;
 }
 
 function applyHistoryInputs(featureId, entry){

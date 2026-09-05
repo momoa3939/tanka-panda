@@ -1,4 +1,4 @@
-const CACHE_NAME = "tanka-panda-v2";
+const CACHE_NAME = "tanka-panda-v3";
 const CACHE_FIRST_ASSETS = [
   "./icon-192.png",
   "./icon-512.png",
@@ -8,6 +8,7 @@ const CACHE_FIRST_ASSETS = [
   "./panda13.png",
   "./panda14.png",
   "./panda-41.png",
+  "./panda-39.png",
   "./manifest.json"
 ];
 
