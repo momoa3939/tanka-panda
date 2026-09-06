@@ -494,6 +494,20 @@
     opacity:0.3;
     cursor:default;
   }
+  .help-reset-btn-wrap{
+    margin:10px 0 4px;
+  }
+  .help-reset-btn-wrap .btn{
+    width:100%;
+    padding:11px;
+    font-size:13.5px;
+  }
+  .color-row{
+    display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;
+  }
+  #tkColorRow.color-row .color-swatch{
+    width:28px; height:28px;
+  }
 
   /* ---- たいきんパンダ：リストUI ---- */
   .tk-add-row{
@@ -595,7 +609,7 @@
     justify-content:center;
     gap:8px;
   }
-  .tk-btn-panda{ width:22px; height:22px; object-fit:contain; flex-shrink:0; }
+  .tk-btn-panda{ width:32px; height:32px; object-fit:contain; flex-shrink:0; }
   .tk-add-list-btn{
     width:100%;
     display:flex;
@@ -641,7 +655,7 @@
     cursor:pointer;
   }
   .tk-reset-choice.selected{
-    border-color:var(--rose-dark);
+    border-color:var(--rose);
     background:var(--rose);
     font-weight:700;
   }
@@ -792,7 +806,6 @@ const TAIKIN_KEY = "taikinPandaData";
 const MAX_DAYLOG = 30;
 const MAX_STOCK_HISTORY = 30;
 const TK_DONE_GRACE_MS = 6 * 60 * 60 * 1000; // チェック後、履歴に移るまでの猶予（6時間）
-const TK_COLOR_PALETTE = ["#AEDFD1","#F0C9B0","#CDBFDD","#F4C6D2","#B7D4F0","#E3D6A8"];
 
 function loadMode(){
   const m = localStorage.getItem(MODE_KEY);
@@ -1197,9 +1210,19 @@ function openTkListModal(list){
   const isEdit = !!list;
   const nameVal = list ? escapeHtml(list.name) : "";
   const resetVal = list ? list.reset : "daily";
+  let selectedColor = list ? list.color : COLOR_PALETTE.find(c => !state.taikin.lists.some(l => l.color === c)) || COLOR_PALETTE[state.taikin.lists.length % COLOR_PALETTE.length];
+  const usedColors = state.taikin.lists
+    .filter(l => !isEdit || l.id !== tkEditingListId)
+    .map(l => l.color);
   modalSheet.innerHTML = `
     <h2>${isEdit ? "リストを編集" : "新しいリスト"}</h2>
     <input type="text" id="tkListNameInput" placeholder="例：帰ったらすること" maxlength="20" value="${nameVal}" style="width:100%; box-sizing:border-box; padding:12px 14px; border-radius:12px; border:1px solid var(--divider); font-size:15px; font-family:'Kosugi Maru',sans-serif; color:var(--text); margin-bottom:16px;">
+    <div class="color-row" id="tkColorRow">
+      ${COLOR_PALETTE.map(c => {
+        const isUsed = usedColors.includes(c);
+        return `<div class="color-swatch ${c===selectedColor?'selected':''} ${isUsed?'used':''}" data-color="${c}" style="background:${c}"></div>`;
+      }).join("")}
+    </div>
     <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">リセットのしかた</div>
     <div style="display:flex; gap:8px; margin-bottom:10px;">
       <button type="button" class="tk-reset-choice ${resetVal==='daily'?'selected':''}" data-reset="daily" style="flex:1;">毎日リセット</button>
@@ -1207,12 +1230,20 @@ function openTkListModal(list){
     </div>
     <div id="tkResetHint" style="font-size:12px; color:var(--muted); line-height:1.6; margin-bottom:18px;">${tkResetHintText(resetVal)}</div>
     <div class="modal-actions">
-      ${isEdit ? `<button class="btn" id="tkListDeleteBtn" style="color:var(--danger-text);">削除</button>` : ""}
+      ${isEdit ? `<button class="btn" id="tkListDeleteBtn">削除</button>` : ""}
       <button class="btn" id="tkListCancelBtn">キャンセル</button>
       <button class="btn" id="tkListSaveBtn">保存</button>
     </div>
   `;
   modalBackdrop.classList.remove("hidden");
+  modalSheet.querySelectorAll("#tkColorRow .color-swatch").forEach(sw => {
+    sw.addEventListener("click", () => {
+      if(sw.classList.contains("used")) return;
+      selectedColor = sw.dataset.color;
+      modalSheet.querySelectorAll("#tkColorRow .color-swatch").forEach(s => s.classList.remove("selected"));
+      sw.classList.add("selected");
+    });
+  });
   modalSheet.querySelectorAll(".tk-reset-choice").forEach(btn => {
     btn.addEventListener("click", () => {
       modalSheet.querySelectorAll(".tk-reset-choice").forEach(b => b.classList.remove("selected"));
@@ -1223,6 +1254,8 @@ function openTkListModal(list){
   document.getElementById("tkListCancelBtn").onclick = closeModal;
   if(isEdit){
     document.getElementById("tkListDeleteBtn").onclick = () => {
+      const targetList = state.taikin.lists.find(x => x.id === tkEditingListId);
+      if(!confirm(`「${targetList.name}」を削除しますか?中の項目もすべて消えます。`)) return;
       state.taikin.lists = state.taikin.lists.filter(x => x.id !== tkEditingListId);
       delete state.taikin.items[tkEditingListId];
       saveTaikinData();
@@ -1239,10 +1272,10 @@ function openTkListModal(list){
       const l = state.taikin.lists.find(x => x.id === tkEditingListId);
       l.name = v;
       l.reset = chosenReset;
+      l.color = selectedColor;
     }else{
       const newId = tkGenId();
-      const color = TK_COLOR_PALETTE[state.taikin.lists.length % TK_COLOR_PALETTE.length];
-      state.taikin.lists.push({ id:newId, name:v, color, reset:chosenReset });
+      state.taikin.lists.push({ id:newId, name:v, color:selectedColor, reset:chosenReset });
       state.taikin.items[newId] = [];
     }
     saveTaikinData();
@@ -1394,27 +1427,101 @@ function openTaikinSettingsModal(){
     <h2>⚙️ 設定</h2>
     <div class="settings-menu">
       <button class="settings-item" id="tkHelpBtn"><span class="settings-icon">📖</span>使い方ガイド</button>
+      <button class="settings-item" id="tkReorderBtn"><span class="settings-icon">↕️</span>並び替え</button>
+      <button class="settings-item" id="tkBackupBtn"><span class="settings-icon">💾</span>バックアップ</button>
+      <button class="settings-item" id="tkRestoreBtn"><span class="settings-icon">📥</span>復元</button>
     </div>
     <div class="modal-actions"><button class="btn" id="tkSettingsCloseBtn">閉じる</button></div>
   `;
   modalBackdrop.classList.remove("hidden");
-  document.getElementById("tkHelpBtn").onclick = () => {
-    modalSheet.innerHTML = `
-      <h2>📖 使い方ガイド</h2>
-      <div class="help-content">
-        <p>🐼 やりたいことを自由にリスト化して、チェックできるアプリだよ。</p>
-        <p><b>リストを追加</b><br>「＋新しいリスト」から好きな名前でリストを作れるよ。「毎日リセット」か「リセットなし」を選べます。</p>
-        <p><b>毎日リセット</b><br>チェックは消えるけど項目は残るよ。日付が変わると自動でチェックが外れて、また明日も使えるよ。</p>
-        <p><b>リセットなし</b><br>チェックした項目はしばらく表示されたあと、自動で消えて「記録」に残るよ。</p>
-        <p><b>まとめてリセット</b><br>ホーム画面のボタンひとつで、「毎日リセット」のリストだけまとめてチェックを外せるよ。</p>
-        <p>🕐（時計マーク）から、過去の記録を振り返れます。</p>
-        <p>画面下のパンダをタップすると「ちょい計算パンダ」に切り替わるよ。</p>
-      </div>
-      <div class="modal-actions"><button class="btn" id="tkHelpCloseBtn">閉じる</button></div>
-    `;
-    document.getElementById("tkHelpCloseBtn").onclick = closeModal;
-  };
+  document.getElementById("tkHelpBtn").onclick = openTkHelpModal;
+  document.getElementById("tkReorderBtn").onclick = openTkReorderModal;
+  document.getElementById("tkBackupBtn").onclick = () => doBackup();
+  document.getElementById("tkRestoreBtn").onclick = () => triggerRestore();
   document.getElementById("tkSettingsCloseBtn").onclick = closeModal;
+}
+
+function openTkHelpModal(){
+  modalSheet.innerHTML = `
+    <h2>📖 使い方ガイド</h2>
+    <div class="help-content">
+      <p>🐼 やりたいことを自由にリスト化して、チェックできるアプリだよ。</p>
+      <p><b>① リストを追加</b><br>「＋新しいリスト」から好きな名前でリストを作れるよ。色も好きなものを選べます。</p>
+      <p><b>② リセットのしかたを選ぶ</b><br>「毎日リセット」…チェックは消えるけど項目は残るよ。日付が変わると自動でチェックが外れて、また明日も使えるよ。<br>「リセットなし」…チェックした項目はしばらく表示されたあと、自動で消えて「記録」の「完了したタスク」に残るよ。</p>
+      <p><b>③ まとめてリセット</b><br>ホーム画面のボタンひとつで、「毎日リセット」のリストだけまとめてチェックを外せるよ。まだチェックしてない項目があるときは、ひとこと確認が出るよ。</p>
+      <p><b>④ 記録を見る</b><br>🕐（時計マーク）から、過去の記録を振り返れます。「毎日リセット」の実績は日付ごとにまとまっていて、タップすると内訳が見られるよ。</p>
+      <p><b>⑤ リストの編集・削除</b><br>各リストの右の鉛筆アイコンから、名前・色・リセット方式を変更したり、削除したりできます。削除するときは確認メッセージが出るので、間違って消してしまう心配はありません。</p>
+      <p><b>⑥ 並び替え</b><br>「設定」→「並び替え」から、リストの並び順を変えられるよ。</p>
+      <p>画面下のパンダをタップすると「ちょい計算パンダ」に切り替わるよ。</p>
+      <p>データはご自身のスマホの中だけに保存され、他の人と共有されることはありません。</p>
+
+      <h3>🔄 表示がおかしいときは</h3>
+      <p>「アップロードしたのに更新されない」「表示が崩れている」など様子がおかしいときは、下のボタンを押してみてください。<br>
+      画面の表示データだけをリセットして、開き直します。リストの中身が消えることはありません。</p>
+      <div class="help-reset-btn-wrap">
+        <button class="btn" id="tkHelpResetCacheBtn">🔄 表示データをリセットする</button>
+      </div>
+
+      <h3>💾 バックアップについて</h3>
+      <p>このアプリのデータは、ご利用のスマホ（またはパソコン）の中だけに保存されます。<br>
+      そのため、機種変更やブラウザのデータ削除などを行うと、リストが消えてしまう場合があります。</p>
+      <p>大切なリストがある時は、「設定」→「バックアップ」からデータ（JSONファイル）を保存しておいてください。<br>
+      保存したファイルは、iCloud・Googleドライブ・OneDrive・メールなど、ご自身が管理しやすい場所に保管してください。</p>
+      <p>⚠️ 「復元」を行うと、現在のデータは選択したバックアップの内容に置き換わります。現在のデータと合体（結合）することはできません。</p>
+
+      <h3>📱 ホーム画面に追加する方法</h3>
+      <p><b>【iPhoneの場合】</b><br>
+      ① Safariでこのページを開く<br>
+      ② 下の「共有」ボタンをタップ<br>
+      ③ 「ホーム画面に追加」を選ぶ<br>
+      ④ 右上の「追加」をタップして完了</p>
+      <p><b>【Androidの場合】</b><br>
+      ① Chromeでこのページを開く<br>
+      ② 右上の「⋮」をタップ<br>
+      ③ 「ホーム画面に追加」または「アプリをインストール」を選ぶ</p>
+    </div>
+    <div class="modal-actions"><button class="btn" id="tkHelpCloseBtn">閉じる</button></div>
+  `;
+  modalBackdrop.classList.remove("hidden");
+  document.getElementById("tkHelpCloseBtn").onclick = closeModal;
+  document.getElementById("tkHelpResetCacheBtn").onclick = () => resetDisplayCache();
+}
+
+/* ---- やることパンダ：リストの並び替え ---- */
+function openTkReorderModal(){
+  renderTkReorderModal();
+  modalBackdrop.classList.remove("hidden");
+}
+function renderTkReorderModal(){
+  const rows = state.taikin.lists.map((l, i) => `
+    <div class="reorder-row">
+      <span class="dot" style="background:${l.color}"></span>
+      <span class="name">${escapeHtml(l.name)}</span>
+      <span class="reorder-btns">
+        <button data-dir="up" data-idx="${i}" ${i===0?'disabled':''}>${ICONS.up}</button>
+        <button data-dir="down" data-idx="${i}" ${i===state.taikin.lists.length-1?'disabled':''}>${ICONS.down}</button>
+      </span>
+    </div>
+  `).join("");
+  modalSheet.innerHTML = `
+    <h2>↕️ 並び替え</h2>
+    <div class="reorder-hint">ホーム画面でのリストの順番を変えられます。</div>
+    <div class="reorder-list">${rows}</div>
+    <div class="modal-actions"><button class="btn" id="tkReorderCloseBtn">閉じる</button></div>
+  `;
+  modalSheet.querySelectorAll(".reorder-btns button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      const dir = btn.dataset.dir;
+      const target = dir === "up" ? idx - 1 : idx + 1;
+      if(target < 0 || target >= state.taikin.lists.length) return;
+      const arr = state.taikin.lists;
+      [arr[idx], arr[target]] = [arr[target], arr[idx]];
+      saveTaikinData();
+      renderTkReorderModal();
+    });
+  });
+  document.getElementById("tkReorderCloseBtn").onclick = () => { closeModal(); if(state.view==="home") render(); };
 }
 
 function applyHistoryInputs(featureId, entry){
@@ -1724,6 +1831,8 @@ function openSettingsModal(){
     <div class="settings-menu">
       <button class="settings-item" id="menuHelpBtn"><span class="settings-icon">📖</span>使い方ガイド</button>
       <button class="settings-item" id="menuReorderBtn"><span class="settings-icon">↕️</span>並び替え</button>
+      <button class="settings-item" id="menuBackupBtn"><span class="settings-icon">💾</span>バックアップ</button>
+      <button class="settings-item" id="menuRestoreBtn"><span class="settings-icon">📥</span>復元</button>
       <hr class="settings-divider">
       <button class="settings-item" id="menuAboutBtn"><span class="settings-icon">ℹ️</span>このアプリについて</button>
     </div>
@@ -1732,6 +1841,8 @@ function openSettingsModal(){
   modalBackdrop.classList.remove("hidden");
   document.getElementById("menuHelpBtn").onclick = openHelpModal;
   document.getElementById("menuReorderBtn").onclick = openReorderModal;
+  document.getElementById("menuBackupBtn").onclick = () => doBackup();
+  document.getElementById("menuRestoreBtn").onclick = () => triggerRestore();
   document.getElementById("menuAboutBtn").onclick = openAboutModal;
   document.getElementById("settingsCloseBtn").onclick = closeModal;
 }
@@ -1749,6 +1860,7 @@ function openHelpModal(){
       <p><b>どっちがお得？</b><br>内容量が違う商品でも、実際どちらが安いかすぐわかるよ</p>
       <p><b>めんつゆ濃縮倍率</b><br>レシピと違う濃さの麺つゆしかない時、必要な量に変換できるよ</p>
       <p>🕐（時計マーク）から、直近の計算履歴を見られます。各機能ごとに新しいものから5件まで残ります。タップすると入力欄に呼び戻せます。</p>
+      <p>画面下のパンダをタップすると「やることパンダ」に切り替わるよ。</p>
       <p>データはご自身のスマホの中だけに保存され、他の人と共有されることはありません。</p>
       <h3>📱 ホーム画面に追加する方法</h3>
       <p><b>【iPhoneの場合】</b><br>
@@ -1761,10 +1873,18 @@ function openHelpModal(){
       ② 右上の「⋮」をタップ<br>
       ③ 「ホーム画面に追加」または「アプリをインストール」を選ぶ</p>
       <p class="help-note">※ このアプリは今後もこっそり機能が増えることがあります。次に開いたときに、新しい計算メニューが増えているかも♪</p>
+
+      <h3>🔄 表示がおかしいときは</h3>
+      <p>「アップロードしたのに更新されない」「表示が崩れている」など様子がおかしいときは、下のボタンを押してみてください。<br>
+      画面の表示データだけをリセットして、開き直します。データの中身が消えることはありません。</p>
+      <div class="help-reset-btn-wrap">
+        <button class="btn" id="helpResetCacheBtn">🔄 表示データをリセットする</button>
+      </div>
     </div>
     <div class="modal-actions"><button class="btn" id="helpCloseBtn">閉じる</button></div>
   `;
   document.getElementById("helpCloseBtn").onclick = closeModal;
+  document.getElementById("helpResetCacheBtn").onclick = () => resetDisplayCache();
 }
 
 function openAboutModal(){
@@ -1847,6 +1967,99 @@ function renderReorderModal(){
     });
   });
   document.getElementById("reorderCloseBtn").onclick = () => { closeModal(); if(state.view==="home") renderHome(); };
+}
+
+/* ====================== 表示データのリセット(キャッシュ削除) ====================== */
+async function resetDisplayCache(){
+  if(!confirm("表示をリセットします。リストの中身は消えません。よろしいですか?")){
+    return;
+  }
+  try{
+    if("caches" in window){
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+    if("serviceWorker" in navigator){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((reg) => reg.unregister()));
+    }
+  }catch(e){
+    // 失敗しても、とりあえず読み込み直しは試みる
+  }
+  location.reload();
+}
+
+/* ====================== バックアップ・復元 ====================== */
+function tkExportSnapshot(){
+  return {
+    order: state.order,
+    history: state.history,
+    colors: state.colors,
+    taikin: state.taikin
+  };
+}
+function doBackup(){
+  try{
+    const json = JSON.stringify(tkExportSnapshot(), null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tanka-panda-backup-${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }catch(e){
+    alert("バックアップの保存に失敗しました。");
+  }
+}
+function triggerRestore(){
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.style.display = "none";
+  input.addEventListener("change", () => {
+    const file = input.files && input.files[0];
+    if(!file){ input.remove(); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed;
+      try{
+        parsed = JSON.parse(reader.result);
+      }catch(e){
+        alert("このファイルは読み込めませんでした。正しいバックアップファイルか確認してください。");
+        input.remove();
+        return;
+      }
+      if(!parsed || typeof parsed !== "object" || !parsed.taikin){
+        alert("このファイルはバックアップ形式ではないようです。");
+        input.remove();
+        return;
+      }
+      if(!confirm("復元すると現在のデータは上書きされます。よろしいですか?")){
+        input.remove();
+        return;
+      }
+      state.order = Array.isArray(parsed.order) ? parsed.order : state.order;
+      state.history = parsed.history || state.history;
+      state.colors = parsed.colors || state.colors;
+      state.taikin = parsed.taikin;
+      saveOrder(state.order);
+      saveHistory();
+      saveColors();
+      saveTaikinData();
+      closeModal();
+      state.view = "home";
+      render();
+      input.remove();
+    };
+    reader.readAsText(file);
+  });
+  document.body.appendChild(input);
+  input.click();
 }
 
 function closeModal(){ modalBackdrop.classList.add("hidden"); }
