@@ -594,8 +594,8 @@
   }
   .tk-taikin-btn{
     width:100%;
-    padding:15px;
-    border-radius:16px;
+    padding:16px;
+    border-radius:18px;
     background:var(--rose);
     color:var(--text);
     border:none;
@@ -607,7 +607,16 @@
     display:flex;
     align-items:center;
     justify-content:center;
-    gap:8px;
+  }
+  .tk-taikin-btn .tk-btn-text{
+    position:relative;
+  }
+  .tk-taikin-btn .tk-btn-panda{
+    position:absolute;
+    right:100%;
+    top:50%;
+    transform:translateY(-50%);
+    margin-right:8px;
   }
   .tk-btn-panda{ width:32px; height:32px; object-fit:contain; flex-shrink:0; }
   .tk-add-list-btn{
@@ -616,9 +625,9 @@
     align-items:center;
     justify-content:center;
     gap:6px;
-    padding:13px;
-    border-radius:16px;
-    border:1px dashed var(--divider);
+    padding:16px;
+    border-radius:18px;
+    border:var(--card-border);
     background:transparent;
     color:var(--muted);
     font-size:14px;
@@ -1147,7 +1156,7 @@ function renderTaikinHome(){
     ${rows}
     <button class="tk-add-list-btn" id="tkAddListBtn">${ICONS.plus}新しいリスト</button>
     ${hasDaily ? `
-    <button class="tk-taikin-btn" id="tkTaikinBtn"><img src="panda14.png" alt="" class="tk-btn-panda">まとめてリセット</button>
+    <button class="tk-taikin-btn" id="tkTaikinBtn"><span class="tk-btn-text"><img src="panda14.png" alt="" class="tk-btn-panda">まとめてリセット</span></button>
     <div class="tk-taikin-sub">「毎日リセット」のリストをまとめてチェック解除するよ</div>
     ` : ""}
   `;
@@ -1831,8 +1840,6 @@ function openSettingsModal(){
     <div class="settings-menu">
       <button class="settings-item" id="menuHelpBtn"><span class="settings-icon">📖</span>使い方ガイド</button>
       <button class="settings-item" id="menuReorderBtn"><span class="settings-icon">↕️</span>並び替え</button>
-      <button class="settings-item" id="menuBackupBtn"><span class="settings-icon">💾</span>バックアップ</button>
-      <button class="settings-item" id="menuRestoreBtn"><span class="settings-icon">📥</span>復元</button>
       <hr class="settings-divider">
       <button class="settings-item" id="menuAboutBtn"><span class="settings-icon">ℹ️</span>このアプリについて</button>
     </div>
@@ -1841,8 +1848,6 @@ function openSettingsModal(){
   modalBackdrop.classList.remove("hidden");
   document.getElementById("menuHelpBtn").onclick = openHelpModal;
   document.getElementById("menuReorderBtn").onclick = openReorderModal;
-  document.getElementById("menuBackupBtn").onclick = () => doBackup();
-  document.getElementById("menuRestoreBtn").onclick = () => triggerRestore();
   document.getElementById("menuAboutBtn").onclick = openAboutModal;
   document.getElementById("settingsCloseBtn").onclick = closeModal;
 }
