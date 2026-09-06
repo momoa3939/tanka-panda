@@ -582,15 +582,70 @@
     width:100%;
     padding:15px;
     border-radius:16px;
-    background:#33302C;
-    color:#fff;
+    background:var(--rose);
+    color:var(--text);
     border:none;
     font-size:15px;
     font-weight:700;
     font-family:'Zen Maru Gothic', sans-serif;
     cursor:pointer;
     margin-top:6px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
   }
+  .tk-btn-panda{ width:22px; height:22px; object-fit:contain; flex-shrink:0; }
+  .tk-add-list-btn{
+    width:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    padding:13px;
+    border-radius:16px;
+    border:1px dashed var(--divider);
+    background:transparent;
+    color:var(--muted);
+    font-size:14px;
+    font-family:'Zen Maru Gothic', sans-serif;
+    cursor:pointer;
+    margin-top:4px;
+  }
+  .tk-add-list-btn svg{ width:16px; height:16px; }
+  .tk-mini-progress{
+    font-size:12px;
+    color:var(--muted);
+    flex-shrink:0;
+  }
+  .tk-list-edit{
+    border:none;
+    background:none;
+    color:var(--muted);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    padding:4px;
+    flex-shrink:0;
+  }
+  .tk-list-edit svg{ width:15px; height:15px; }
+  .tk-reset-choice{
+    padding:10px;
+    border-radius:12px;
+    border:1px solid var(--divider);
+    background:var(--bg);
+    font-size:13.5px;
+    font-family:'Kosugi Maru',sans-serif;
+    color:var(--text);
+    cursor:pointer;
+  }
+  .tk-reset-choice.selected{
+    border-color:var(--rose-dark);
+    background:var(--rose);
+    font-weight:700;
+  }
+  .tk-history-toggle{ cursor:pointer; }
   .tk-taikin-sub{
     text-align:center;
     font-size:12px;
@@ -731,18 +786,13 @@ function pushHistory(featureId, label, sub){
   saveHistory();
 }
 
-/* ====================== たいきんパンダ：機能定義・データ管理 ====================== */
+/* ====================== やることパンダ：機能定義・データ管理 ====================== */
 const MODE_KEY = "tankaPandaMode";
 const TAIKIN_KEY = "taikinPandaData";
 const MAX_DAYLOG = 30;
 const MAX_STOCK_HISTORY = 30;
-
-const TK_FEATURES = [
-  { id:"tk_daily", name:"毎日のタスク", color:"#AEDFD1" },
-  { id:"tk_today", name:"今日だけのタスク", color:"#F0C9B0" },
-  { id:"tk_stock", name:"備品リスト", color:"#CDBFDD" }
-];
-function tkFeatureById(id){ return TK_FEATURES.find(f => f.id === id); }
+const TK_DONE_GRACE_MS = 6 * 60 * 60 * 1000; // チェック後、履歴に移るまでの猶予（6時間）
+const TK_COLOR_PALETTE = ["#AEDFD1","#F0C9B0","#CDBFDD","#F4C6D2","#B7D4F0","#E3D6A8"];
 
 function loadMode(){
   const m = localStorage.getItem(MODE_KEY);
@@ -755,15 +805,19 @@ function todayStr(){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 function tkGenId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function nowISO(){ return new Date().toISOString(); }
 
 function defaultTaikinData(){
   return {
     lastDate: todayStr(),
-    dailyItems: [],
-    todayItems: [],
-    stockItems: [],
-    stockHistory: [],
-    dayLog: []
+    lists: [
+      { id:"tk_daily", name:"毎日のタスク", color:"#AEDFD1", reset:"daily" },
+      { id:"tk_today", name:"今日だけのタスク", color:"#F0C9B0", reset:"daily" },
+      { id:"tk_stock", name:"備品リスト", color:"#CDBFDD", reset:"none" }
+    ],
+    items: { tk_daily:[], tk_today:[], tk_stock:[] },
+    dayLog: [],
+    completedHistory: []
   };
 }
 function loadTaikinData(){
@@ -773,43 +827,91 @@ function loadTaikinData(){
     if(raw) d = JSON.parse(raw);
   }catch(e){}
   if(!d) d = defaultTaikinData();
-  if(!Array.isArray(d.dailyItems)) d.dailyItems = [];
-  if(!Array.isArray(d.todayItems)) d.todayItems = [];
-  if(!Array.isArray(d.stockItems)) d.stockItems = [];
-  if(!Array.isArray(d.stockHistory)) d.stockHistory = [];
+  if(!Array.isArray(d.lists)){
+    // 旧バージョン（固定3リスト）からの引き継ぎ
+    d.lists = [
+      { id:"tk_daily", name:"毎日のタスク", color:"#AEDFD1", reset:"daily" },
+      { id:"tk_today", name:"今日だけのタスク", color:"#F0C9B0", reset:"daily" },
+      { id:"tk_stock", name:"備品リスト", color:"#CDBFDD", reset:"none" }
+    ];
+    d.items = {
+      tk_daily: Array.isArray(d.dailyItems) ? d.dailyItems : [],
+      tk_today: Array.isArray(d.todayItems) ? d.todayItems : [],
+      tk_stock: Array.isArray(d.stockItems) ? d.stockItems.map(i => ({ id:i.id, text:i.text, checked:false, doneAt:null })) : []
+    };
+  }
+  if(!d.items) d.items = {};
+  d.lists.forEach(l => { if(!Array.isArray(d.items[l.id])) d.items[l.id] = []; });
   if(!Array.isArray(d.dayLog)) d.dayLog = [];
+  if(!Array.isArray(d.completedHistory)) d.completedHistory = [];
   return d;
 }
 function saveTaikinData(){ localStorage.setItem(TAIKIN_KEY, JSON.stringify(state.taikin)); }
 
-// 前日分をログに残しつつ、毎日／今日だけタスクをリセットする
-function tkLogAndReset(){
-  const t = state.taikin;
-  const dailyTotal = t.dailyItems.length;
-  const dailyDone = t.dailyItems.filter(i=>i.checked).length;
-  const todayTotal = t.todayItems.length;
-  const todayDone = t.todayItems.filter(i=>i.checked).length;
+// 「リセットなし」リストで、チェック後6時間経った項目を完了履歴へ移す
+function tkMigrateCompleted(){
+  let changed = false;
+  const now = Date.now();
+  state.taikin.lists.forEach(list => {
+    if(list.reset !== "none") return;
+    const items = state.taikin.items[list.id] || [];
+    const stillActive = [];
+    items.forEach(item => {
+      if(item.checked){
+        const doneTime = item.doneAt ? new Date(item.doneAt).getTime() : now;
+        const elapsed = now - doneTime;
+        if(!isNaN(doneTime) && elapsed >= TK_DONE_GRACE_MS){
+          state.taikin.completedHistory.unshift({
+            id: tkGenId(), text: item.text, listName: list.name,
+            date: item.doneAt ? item.doneAt.slice(0,10) : todayStr()
+          });
+          changed = true;
+        }else{
+          stillActive.push(item);
+        }
+      }else{
+        stillActive.push(item);
+      }
+    });
+    state.taikin.items[list.id] = stillActive;
+  });
+  if(changed){
+    state.taikin.completedHistory = state.taikin.completedHistory.slice(0, MAX_STOCK_HISTORY);
+    saveTaikinData();
+  }
+  return changed;
+}
 
-  if(dailyTotal + todayTotal > 0){
-    const entry = {
-      date: t.lastDate,
-      dailyDone, dailyTotal,
-      todayDone, todayTotal,
-      todayList: t.todayItems.map(i => ({ text:i.text, checked:i.checked }))
-    };
-    t.dayLog = t.dayLog.filter(e => e.date !== t.lastDate);
-    t.dayLog.unshift(entry);
+// 「毎日リセット」リストを記録に残しつつチェックを外す
+function tkDailyReset(manual){
+  const t = state.taikin;
+  const dailyLists = t.lists.filter(l => l.reset === "daily");
+  const logLists = [];
+  dailyLists.forEach(l => {
+    const items = t.items[l.id] || [];
+    if(items.length === 0) return;
+    const done = items.filter(i => i.checked).length;
+    logLists.push({
+      listId: l.id, name: l.name, done, total: items.length,
+      items: items.map(i => ({ text:i.text, checked:i.checked }))
+    });
+  });
+  const dateForLog = manual ? todayStr() : t.lastDate;
+  if(logLists.length > 0){
+    t.dayLog = t.dayLog.filter(e => e.date !== dateForLog);
+    t.dayLog.unshift({ date: dateForLog, lists: logLists });
     t.dayLog = t.dayLog.slice(0, MAX_DAYLOG);
   }
-
-  t.dailyItems = t.dailyItems.map(i => ({ ...i, checked:false }));
-  t.todayItems = [];
+  dailyLists.forEach(l => {
+    t.items[l.id] = (t.items[l.id] || []).map(i => ({ ...i, checked:false, doneAt:null }));
+  });
   t.lastDate = todayStr();
   saveTaikinData();
 }
 function tkCheckAutoReset(){
+  tkMigrateCompleted();
   if(state.taikin.lastDate !== todayStr()){
-    tkLogAndReset();
+    tkDailyReset(false);
   }
 }
 
@@ -828,7 +930,7 @@ const state = {
   colors: loadColors(),
   mode: loadMode(),    // "calc" | "taikin"
   taikin: loadTaikinData(),
-  view: "home",       // "home" | "history" | featureId | tk_history | tk_daily | tk_today | tk_stock
+  view: "home",       // "home" | "history" | featureId | tk_history | リストid
 };
 tkCheckAutoReset();
 setInterval(tkCheckAutoReset, 60000);
@@ -856,9 +958,10 @@ const ICONS = {
   up: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
   down: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
   calculator: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2.5"></rect><line x1="8" y1="6.5" x2="16" y2="6.5"></line><line x1="8" y1="11" x2="8" y2="11"></line><line x1="12" y1="11" x2="12" y2="11"></line><line x1="16" y1="11" x2="16" y2="11"></line><line x1="8" y1="14.5" x2="8" y2="14.5"></line><line x1="12" y1="14.5" x2="12" y2="14.5"></line><line x1="16" y1="14.5" x2="16" y2="14.5"></line><line x1="8" y1="18" x2="8" y2="18"></line><line x1="12" y1="18" x2="12" y2="18"></line><line x1="16" y1="18" x2="16" y2="18"></line></svg>`,
-  checklist: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11"></path><path d="M9 12h11"></path><path d="M9 18h11"></path><path d="M4 6.2l1.2 1.2L7.4 5"></path><path d="M4 12.2l1.2 1.2L7.4 11"></path><path d="M4 18.2l1.2 1.2L7.4 17"></path></svg>`,
+  checklist: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"></path><rect x="9" y="3" width="6" height="4" rx="1"></rect><path d="M9 14l2 2 4-4"></path></svg>`,
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`,
-  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>`
+  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>`,
+  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>`
 };
 
 /* ====================== ルーター/描画 ====================== */
@@ -893,16 +996,18 @@ function render(){
   }else if(state.view === "tk_history"){
     renderTopbarSub("記録");
     renderTkHistory();
-  }else if(String(state.view).indexOf("tk_") === 0){
-    const f = tkFeatureById(state.view);
-    document.documentElement.style.setProperty("--current-feature-color", f.color);
-    renderTopbarSub(f.name);
-    renderTkFeature(f.id);
   }else{
-    const f = featureById(state.view);
-    document.documentElement.style.setProperty("--current-feature-color", featureColor(f));
-    renderTopbarSub(f.name);
-    renderFeature(f.id);
+    const tkList = state.taikin.lists.find(l => l.id === state.view);
+    if(tkList){
+      document.documentElement.style.setProperty("--current-feature-color", tkList.color);
+      renderTopbarSub(tkList.name);
+      renderTkList(tkList.id);
+    }else{
+      const f = featureById(state.view);
+      document.documentElement.style.setProperty("--current-feature-color", featureColor(f));
+      renderTopbarSub(f.name);
+      renderFeature(f.id);
+    }
   }
   window.scrollTo(0,0);
 }
@@ -921,7 +1026,7 @@ function renderHeroTap(){
 function renderTopbarHome(){
   if(state.mode === "taikin"){
     topbar.innerHTML = `
-      <h1><span class="title-icon" style="color:#D4537E;">${ICONS.checklist}</span>たいきんパンダ</h1>
+      <h1><span class="title-icon" style="color:#D4537E;">${ICONS.checklist}</span>やることパンダ</h1>
       <button class="iconbtn" id="historyBtn">${ICONS.clock}</button>
       <button class="iconbtn" id="settingsBtn">${ICONS.gear}</button>
     `;
@@ -1007,92 +1112,203 @@ function renderHistory(){
   });
 }
 
-/* ====================== たいきんパンダ：ホーム ====================== */
+/* ====================== やることパンダ：ホーム ====================== */
 function renderTaikinHome(){
-  const rows = TK_FEATURES.map(f => `
-    <div class="menu-card" data-id="${f.id}">
-      <span class="dot" style="background:${f.color}"></span>
-      <span class="name">${escapeHtml(f.name)}</span>
-      <span class="arrow">${ICONS.arrow}</span>
-    </div>
-  `).join("");
+  const rows = state.taikin.lists.map(l => {
+    const items = state.taikin.items[l.id] || [];
+    const total = items.length;
+    const done = items.filter(i => i.checked).length;
+    const sub = total === 0 ? "" : `${done}/${total}`;
+    return `
+      <div class="menu-card" data-id="${l.id}">
+        <span class="dot" style="background:${l.color}"></span>
+        <span class="name">${escapeHtml(l.name)}</span>
+        ${sub ? `<span class="tk-mini-progress">${sub}</span>` : ""}
+        <button class="tk-list-edit" data-edit="${l.id}">${ICONS.edit}</button>
+        <span class="arrow">${ICONS.arrow}</span>
+      </div>
+    `;
+  }).join("");
+  const hasDaily = state.taikin.lists.some(l => l.reset === "daily");
   mainEl.innerHTML = `
     ${rows}
-    <button class="tk-taikin-btn" id="tkTaikinBtn">🐼 退勤する（チェックをリセット）</button>
-    <div class="tk-taikin-sub">押すと今日の記録を残して、毎日／今日だけのタスクがリセットされるよ</div>
+    <button class="tk-add-list-btn" id="tkAddListBtn">${ICONS.plus}新しいリスト</button>
+    ${hasDaily ? `
+    <button class="tk-taikin-btn" id="tkTaikinBtn"><img src="panda14.png" alt="" class="tk-btn-panda">まとめてリセット</button>
+    <div class="tk-taikin-sub">「毎日リセット」のリストをまとめてチェック解除するよ</div>
+    ` : ""}
   `;
   mainEl.querySelectorAll(".menu-card").forEach(el => {
     el.addEventListener("click", () => goFeature(el.dataset.id));
   });
-  document.getElementById("tkTaikinBtn").onclick = () => {
-    tkLogAndReset();
-    render();
-    tkToast("お疲れさま！また明日🐼");
-  };
+  mainEl.querySelectorAll(".tk-list-edit").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const list = state.taikin.lists.find(x => x.id === btn.dataset.edit);
+      openTkListModal(list);
+    });
+  });
+  document.getElementById("tkAddListBtn").onclick = () => openTkListModal(null);
+  const resetBtn = document.getElementById("tkTaikinBtn");
+  if(resetBtn) resetBtn.onclick = tkManualReset;
   homeHeroFixed.style.display = "block";
 }
 
-/* ====================== たいきんパンダ：各リスト画面 ====================== */
+function tkManualReset(){
+  const dailyLists = state.taikin.lists.filter(l => l.reset === "daily");
+  const uncheckedCount = dailyLists.reduce((sum, l) => sum + (state.taikin.items[l.id] || []).filter(i => !i.checked).length, 0);
+  if(uncheckedCount > 0){
+    openTkConfirmResetModal(uncheckedCount);
+  }else{
+    tkDailyReset(true);
+    render();
+    tkToast("お疲れさま！また明日🐼");
+  }
+}
+
+function openTkConfirmResetModal(count){
+  modalSheet.innerHTML = `
+    <h2>まだ${count}個あるよ</h2>
+    <p style="font-size:14px; color:var(--muted); line-height:1.7; margin:0 0 20px;">チェックしてない項目が${count}個あるけど、このままリセットする？</p>
+    <div class="modal-actions">
+      <button class="btn" id="tkConfirmCancel">やめる</button>
+      <button class="btn" id="tkConfirmOk">リセットする</button>
+    </div>
+  `;
+  modalBackdrop.classList.remove("hidden");
+  document.getElementById("tkConfirmCancel").onclick = closeModal;
+  document.getElementById("tkConfirmOk").onclick = () => {
+    closeModal();
+    tkDailyReset(true);
+    render();
+    tkToast("お疲れさま！また明日🐼");
+  };
+}
+
+/* ---- リストの追加／編集 ---- */
+let tkEditingListId = null;
+function tkResetHintText(mode){
+  return mode === "daily"
+    ? "チェックは消えるけど項目は残るよ。日付が変わると自動でチェックが外れて、また明日も使えるよ。"
+    : "チェックした項目はしばらく表示されたあと、自動で消えて記録に残るよ。";
+}
+function openTkListModal(list){
+  tkEditingListId = list ? list.id : null;
+  const isEdit = !!list;
+  const nameVal = list ? escapeHtml(list.name) : "";
+  const resetVal = list ? list.reset : "daily";
+  modalSheet.innerHTML = `
+    <h2>${isEdit ? "リストを編集" : "新しいリスト"}</h2>
+    <input type="text" id="tkListNameInput" placeholder="例：帰ったらすること" maxlength="20" value="${nameVal}" style="width:100%; box-sizing:border-box; padding:12px 14px; border-radius:12px; border:1px solid var(--divider); font-size:15px; font-family:'Kosugi Maru',sans-serif; color:var(--text); margin-bottom:16px;">
+    <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">リセットのしかた</div>
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <button type="button" class="tk-reset-choice ${resetVal==='daily'?'selected':''}" data-reset="daily" style="flex:1;">毎日リセット</button>
+      <button type="button" class="tk-reset-choice ${resetVal==='none'?'selected':''}" data-reset="none" style="flex:1;">リセットなし</button>
+    </div>
+    <div id="tkResetHint" style="font-size:12px; color:var(--muted); line-height:1.6; margin-bottom:18px;">${tkResetHintText(resetVal)}</div>
+    <div class="modal-actions">
+      ${isEdit ? `<button class="btn" id="tkListDeleteBtn" style="color:var(--danger-text);">削除</button>` : ""}
+      <button class="btn" id="tkListCancelBtn">キャンセル</button>
+      <button class="btn" id="tkListSaveBtn">保存</button>
+    </div>
+  `;
+  modalBackdrop.classList.remove("hidden");
+  modalSheet.querySelectorAll(".tk-reset-choice").forEach(btn => {
+    btn.addEventListener("click", () => {
+      modalSheet.querySelectorAll(".tk-reset-choice").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      document.getElementById("tkResetHint").textContent = tkResetHintText(btn.dataset.reset);
+    });
+  });
+  document.getElementById("tkListCancelBtn").onclick = closeModal;
+  if(isEdit){
+    document.getElementById("tkListDeleteBtn").onclick = () => {
+      state.taikin.lists = state.taikin.lists.filter(x => x.id !== tkEditingListId);
+      delete state.taikin.items[tkEditingListId];
+      saveTaikinData();
+      closeModal();
+      if(state.view === tkEditingListId) state.view = "home";
+      render();
+    };
+  }
+  document.getElementById("tkListSaveBtn").onclick = () => {
+    const v = document.getElementById("tkListNameInput").value.trim();
+    if(!v) return;
+    const chosenReset = modalSheet.querySelector(".tk-reset-choice.selected")?.dataset.reset || "daily";
+    if(tkEditingListId){
+      const l = state.taikin.lists.find(x => x.id === tkEditingListId);
+      l.name = v;
+      l.reset = chosenReset;
+    }else{
+      const newId = tkGenId();
+      const color = TK_COLOR_PALETTE[state.taikin.lists.length % TK_COLOR_PALETTE.length];
+      state.taikin.lists.push({ id:newId, name:v, color, reset:chosenReset });
+      state.taikin.items[newId] = [];
+    }
+    saveTaikinData();
+    closeModal();
+    render();
+  };
+}
+
+/* ====================== やることパンダ：各リスト画面 ====================== */
 function tkCheckSvg(){
   return `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12.5L9.5 18L20 6" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-function renderTkFeature(id){
-  if(id === "tk_daily") return renderTkList("daily");
-  if(id === "tk_today") return renderTkList("today");
-  if(id === "tk_stock") return renderTkStock();
-}
-
-function renderTkList(kind){
-  const key = kind === "daily" ? "dailyItems" : "todayItems";
-  const items = state.taikin[key];
-  const placeholder = kind === "daily" ? "毎日やることを追加" : "今日だけの用事を追加";
-
+function renderTkList(listId){
+  const list = state.taikin.lists.find(l => l.id === listId);
+  if(!list){ goHome(); return; }
+  const items = state.taikin.items[listId] || [];
   const total = items.length;
-  const done = items.filter(i=>i.checked).length;
+  const done = items.filter(i => i.checked).length;
 
   mainEl.innerHTML = `
     <div class="tk-add-row">
-      <input type="text" id="tkInput" placeholder="${placeholder}" maxlength="60">
+      <input type="text" id="tkInput" placeholder="${escapeHtml(list.name)}に追加" maxlength="60">
       <button id="tkAddBtn">${ICONS.plus}</button>
     </div>
     <div class="tk-progress"><span>${total===0?'':`${done}/${total} 完了`}</span></div>
     <div id="tkList"></div>
   `;
 
+  function updateProgress(){
+    const arr = state.taikin.items[listId] || [];
+    const d2 = arr.filter(i => i.checked).length;
+    mainEl.querySelector(".tk-progress span").textContent = arr.length===0 ? '' : `${d2}/${arr.length} 完了`;
+  }
+
   function draw(){
-    const list = state.taikin[key];
+    const arr = state.taikin.items[listId] || [];
     const listEl = document.getElementById("tkList");
-    if(list.length === 0){
+    if(arr.length === 0){
       listEl.innerHTML = `<div class="empty-hint" style="margin-top:16px;">まだ項目がないよ。上の欄から追加してね。</div>`;
-    }else{
-      listEl.innerHTML = list.map(item => `
-        <div class="tk-item ${item.checked?'checked':''}" data-id="${item.id}">
-          <div class="tk-checkbox ${item.checked?'on':''}" data-act="toggle">${tkCheckSvg()}</div>
-          <span class="tk-text">${escapeHtml(item.text)}</span>
-          <button class="tk-remove" data-act="remove">${ICONS.trash}</button>
-        </div>
-      `).join("");
-      listEl.querySelectorAll(".tk-item").forEach(row => {
-        const id = row.dataset.id;
-        row.querySelector('[data-act="toggle"]').addEventListener("click", () => {
-          const item = state.taikin[key].find(i=>i.id===id);
-          item.checked = !item.checked;
-          saveTaikinData();
-          const doneNow = state.taikin[key].filter(i=>i.checked).length;
-          mainEl.querySelector(".tk-progress span").textContent = `${doneNow}/${state.taikin[key].length} 完了`;
-          draw();
-        });
-        row.querySelector('[data-act="remove"]').addEventListener("click", () => {
-          state.taikin[key] = state.taikin[key].filter(i=>i.id!==id);
-          saveTaikinData();
-          const t2 = state.taikin[key].length;
-          const d2 = state.taikin[key].filter(i=>i.checked).length;
-          mainEl.querySelector(".tk-progress span").textContent = t2===0?'':`${d2}/${t2} 完了`;
-          draw();
-        });
-      });
+      return;
     }
+    listEl.innerHTML = arr.map(item => `
+      <div class="tk-item ${item.checked?'checked':''}" data-id="${item.id}">
+        <div class="tk-checkbox ${item.checked?'on':''}" data-act="toggle">${tkCheckSvg()}</div>
+        <span class="tk-text">${escapeHtml(item.text)}</span>
+        <button class="tk-remove" data-act="remove">${ICONS.trash}</button>
+      </div>
+    `).join("");
+    listEl.querySelectorAll(".tk-item").forEach(row => {
+      const id = row.dataset.id;
+      row.querySelector('[data-act="toggle"]').addEventListener("click", () => {
+        const item = state.taikin.items[listId].find(i => i.id === id);
+        item.checked = !item.checked;
+        item.doneAt = item.checked ? nowISO() : null;
+        saveTaikinData();
+        updateProgress();
+        draw();
+      });
+      row.querySelector('[data-act="remove"]').addEventListener("click", () => {
+        state.taikin.items[listId] = state.taikin.items[listId].filter(i => i.id !== id);
+        saveTaikinData();
+        updateProgress();
+        draw();
+      });
+    });
   }
   draw();
 
@@ -1102,122 +1318,77 @@ function renderTkList(kind){
     const input = document.getElementById("tkInput");
     const v = input.value.trim();
     if(!v) return;
-    state.taikin[key].push({ id: tkGenId(), text:v, checked:false });
+    state.taikin.items[listId].push({ id: tkGenId(), text:v, checked:false, doneAt:null });
     input.value = "";
     saveTaikinData();
-    const t2 = state.taikin[key].length;
-    const d2 = state.taikin[key].filter(i=>i.checked).length;
-    mainEl.querySelector(".tk-progress span").textContent = `${d2}/${t2} 完了`;
+    updateProgress();
     draw();
   }
 }
 
-function renderTkStock(){
-  mainEl.innerHTML = `
-    <div class="tk-add-row">
-      <input type="text" id="tkStockInput" placeholder="必要な備品を追加（例：ゴミ袋、コーヒー）" maxlength="60">
-      <button id="tkStockAddBtn">${ICONS.plus}</button>
-    </div>
-    <div id="tkStockList"></div>
-    <div class="section-label" id="tkStockHistLabel" style="display:none;">購入履歴</div>
-    <div id="tkStockHistList"></div>
-  `;
-
-  function draw(){
-    const items = state.taikin.stockItems;
-    const listEl = document.getElementById("tkStockList");
-    if(items.length === 0){
-      listEl.innerHTML = `<div class="empty-hint" style="margin-top:16px;">今のところ必要な備品はないよ。</div>`;
-    }else{
-      listEl.innerHTML = items.map(item => `
-        <div class="tk-item" data-id="${item.id}">
-          <div class="tk-checkbox" data-act="buy">${tkCheckSvg()}</div>
-          <span class="tk-text">${escapeHtml(item.text)}</span>
-          <button class="tk-remove" data-act="remove">${ICONS.trash}</button>
-        </div>
-      `).join("");
-      listEl.querySelectorAll(".tk-item").forEach(row => {
-        const id = row.dataset.id;
-        row.querySelector('[data-act="buy"]').addEventListener("click", () => {
-          const idx = state.taikin.stockItems.findIndex(i=>i.id===id);
-          if(idx === -1) return;
-          const item = state.taikin.stockItems[idx];
-          state.taikin.stockItems.splice(idx,1);
-          state.taikin.stockHistory.unshift({ id: tkGenId(), text:item.text, date: todayStr() });
-          state.taikin.stockHistory = state.taikin.stockHistory.slice(0, MAX_STOCK_HISTORY);
-          saveTaikinData();
-          tkToast("購入済みにしたよ");
-          draw();
-        });
-        row.querySelector('[data-act="remove"]').addEventListener("click", () => {
-          state.taikin.stockItems = state.taikin.stockItems.filter(i=>i.id!==id);
-          saveTaikinData();
-          draw();
-        });
-      });
-    }
-
-    const hist = state.taikin.stockHistory;
-    const histLabel = document.getElementById("tkStockHistLabel");
-    const histList = document.getElementById("tkStockHistList");
-    if(hist.length === 0){
-      histLabel.style.display = "none";
-      histList.innerHTML = "";
-    }else{
-      histLabel.style.display = "block";
-      histList.innerHTML = hist.map(h => `
-        <div class="tk-history-item">
-          <div class="tk-hdate">${escapeHtml(h.text)}</div>
-          <div class="tk-hsub">${escapeHtml(h.date)} に購入済み</div>
-        </div>
-      `).join("");
-    }
-  }
-  draw();
-
-  document.getElementById("tkStockAddBtn").onclick = addStock;
-  document.getElementById("tkStockInput").addEventListener("keydown", e => { if(e.key==="Enter") addStock(); });
-  function addStock(){
-    const input = document.getElementById("tkStockInput");
-    const v = input.value.trim();
-    if(!v) return;
-    state.taikin.stockItems.push({ id: tkGenId(), text:v });
-    input.value = "";
-    saveTaikinData();
-    draw();
-  }
-}
-
-/* ====================== たいきんパンダ：記録（履歴） ====================== */
+/* ====================== やることパンダ：記録（履歴） ====================== */
 function renderTkHistory(){
   const log = state.taikin.dayLog;
-  if(log.length === 0){
+  const completed = state.taikin.completedHistory;
+  if(log.length === 0 && completed.length === 0){
     mainEl.innerHTML = `
       <div class="empty-hint">
         ${pandaImg("panda13")}
-        まだ記録はないよ。<br>「退勤する」を押すか、日付が変わると残るよ♪
+        まだ記録はないよ。<br>「まとめてリセット」を押すか、日付が変わると残るよ♪
       </div>
     `;
     return;
   }
-  mainEl.innerHTML = `
+  const logHtml = log.length ? `
     <div class="history-section-label">直近${log.length}日分の記録（最大${MAX_DAYLOG}日分）</div>
     <div id="tkHistList"></div>
-  `;
-  document.getElementById("tkHistList").innerHTML = log.map(e => {
-    const todaySub = e.todayTotal > 0
-      ? `今日だけ：${e.todayDone}/${e.todayTotal} 完了（${e.todayList.map(t=>escapeHtml(t.text)+(t.checked?'✓':'')).join('、')}）`
-      : `今日だけ：追加なし`;
-    return `
+  ` : "";
+  const completedHtml = completed.length ? `
+    <div class="history-section-label" style="margin-top:${log.length?'20px':'0'};">完了したタスク</div>
+    <div id="tkCompletedList"></div>
+  ` : "";
+  mainEl.innerHTML = logHtml + completedHtml;
+
+  if(log.length){
+    document.getElementById("tkHistList").innerHTML = log.map((e,i) => {
+      const totalDone = e.lists.reduce((s,l)=>s+l.done,0);
+      const totalAll = e.lists.reduce((s,l)=>s+l.total,0);
+      return `
+        <div class="tk-history-item tk-history-toggle" data-idx="${i}">
+          <div class="tk-hdate">${escapeHtml(e.date)}</div>
+          <div class="tk-hsub">${totalDone}/${totalAll} 完了　${ICONS.arrow}</div>
+          <div class="tk-hdetail" style="display:none;"></div>
+        </div>
+      `;
+    }).join("");
+    document.querySelectorAll(".tk-history-toggle").forEach(el => {
+      el.addEventListener("click", () => {
+        const detail = el.querySelector(".tk-hdetail");
+        const isOpen = detail.style.display !== "none";
+        if(isOpen){ detail.style.display = "none"; return; }
+        const idx = parseInt(el.dataset.idx, 10);
+        const e = log[idx];
+        detail.innerHTML = e.lists.map(l => `
+          <div style="margin-top:8px;">
+            <div style="font-weight:700; font-family:'Zen Maru Gothic', sans-serif;">${escapeHtml(l.name)}（${l.done}/${l.total}）</div>
+            <div style="color:var(--muted); font-size:12.5px; line-height:1.6;">${l.items.map(it=>escapeHtml(it.text)+(it.checked?'✓':'')).join('、')}</div>
+          </div>
+        `).join("");
+        detail.style.display = "block";
+      });
+    });
+  }
+  if(completed.length){
+    document.getElementById("tkCompletedList").innerHTML = completed.map(h => `
       <div class="tk-history-item">
-        <div class="tk-hdate">${escapeHtml(e.date)}</div>
-        <div class="tk-hsub">毎日：${e.dailyDone}/${e.dailyTotal} 完了<br>${todaySub}</div>
+        <div class="tk-hdate">${escapeHtml(h.text)}</div>
+        <div class="tk-hsub">${escapeHtml(h.listName)}・${escapeHtml(h.date)}</div>
       </div>
-    `;
-  }).join("");
+    `).join("");
+  }
 }
 
-/* ====================== たいきんパンダ：設定 ====================== */
+/* ====================== やることパンダ：設定 ====================== */
 function openTaikinSettingsModal(){
   modalSheet.innerHTML = `
     <h2>⚙️ 設定</h2>
@@ -1231,11 +1402,12 @@ function openTaikinSettingsModal(){
     modalSheet.innerHTML = `
       <h2>📖 使い方ガイド</h2>
       <div class="help-content">
-        <p>🐼 退勤前にやることをチェックできるリストだよ。</p>
-        <p><b>毎日のタスク</b><br>登録しておくと、日付が変わると自動でチェックがリセットされるよ。</p>
-        <p><b>今日だけのタスク</b><br>その日だけ必要な用事をサッと追加できるよ。こちらも日付が変わるとリセットされるよ。</p>
-        <p><b>備品リスト</b><br>買っておきたい消耗品などをためておくリスト。チェックすると「購入履歴」に日付付きで残るよ。</p>
-        <p>🕐（時計マーク）から、過去の「毎日／今日だけ」の達成記録を振り返れます。</p>
+        <p>🐼 やりたいことを自由にリスト化して、チェックできるアプリだよ。</p>
+        <p><b>リストを追加</b><br>「＋新しいリスト」から好きな名前でリストを作れるよ。「毎日リセット」か「リセットなし」を選べます。</p>
+        <p><b>毎日リセット</b><br>チェックは消えるけど項目は残るよ。日付が変わると自動でチェックが外れて、また明日も使えるよ。</p>
+        <p><b>リセットなし</b><br>チェックした項目はしばらく表示されたあと、自動で消えて「記録」に残るよ。</p>
+        <p><b>まとめてリセット</b><br>ホーム画面のボタンひとつで、「毎日リセット」のリストだけまとめてチェックを外せるよ。</p>
+        <p>🕐（時計マーク）から、過去の記録を振り返れます。</p>
         <p>画面下のパンダをタップすると「ちょい計算パンダ」に切り替わるよ。</p>
       </div>
       <div class="modal-actions"><button class="btn" id="tkHelpCloseBtn">閉じる</button></div>
