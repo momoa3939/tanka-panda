@@ -584,6 +584,15 @@
     padding:4px;
   }
   .tk-remove svg{ width:16px; height:16px; }
+  .tk-edit{
+    border:none; background:none;
+    color:var(--muted);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    flex-shrink:0;
+    padding:4px;
+  }
+  .tk-edit svg{ width:15px; height:15px; }
   .tk-progress{
     display:flex;
     justify-content:space-between;
@@ -692,6 +701,11 @@
     font-size:12.5px;
     color:var(--muted);
     line-height:1.7;
+  }
+  .tk-history-item .tk-hsub svg{
+    width:13px;
+    height:13px;
+    vertical-align:-2px;
   }
   .tk-toast{
     position:fixed;
@@ -1331,6 +1345,7 @@ function renderTkList(listId){
       <div class="tk-item ${item.checked?'checked':''}" data-id="${item.id}">
         <div class="tk-checkbox ${item.checked?'on':''}" data-act="toggle">${tkCheckSvg()}</div>
         <span class="tk-text">${escapeHtml(item.text)}</span>
+        <button class="tk-edit" data-act="edit">${ICONS.edit}</button>
         <button class="tk-remove" data-act="remove">${ICONS.trash}</button>
       </div>
     `).join("");
@@ -1343,6 +1358,9 @@ function renderTkList(listId){
         saveTaikinData();
         updateProgress();
         draw();
+      });
+      row.querySelector('[data-act="edit"]').addEventListener("click", () => {
+        openTkItemEditModal(listId, id, draw, updateProgress);
       });
       row.querySelector('[data-act="remove"]').addEventListener("click", () => {
         state.taikin.items[listId] = state.taikin.items[listId].filter(i => i.id !== id);
@@ -1369,6 +1387,34 @@ function renderTkList(listId){
 }
 
 /* ====================== やることパンダ：記録（履歴） ====================== */
+function openTkItemEditModal(listId, itemId, onSaved, onProgress){
+  const item = state.taikin.items[listId].find(i => i.id === itemId);
+  if(!item) return;
+  modalSheet.innerHTML = `
+    <h2>タスクを編集</h2>
+    <input type="text" id="tkItemEditInput" maxlength="60" value="${escapeHtml(item.text)}" style="width:100%; box-sizing:border-box; padding:12px 14px; border-radius:12px; border:1px solid var(--divider); font-size:15px; font-family:'Kosugi Maru',sans-serif; color:var(--text); margin-bottom:18px;">
+    <div class="modal-actions">
+      <button class="btn" id="tkItemCancelBtn">キャンセル</button>
+      <button class="btn" id="tkItemSaveBtn">保存</button>
+    </div>
+  `;
+  modalBackdrop.classList.remove("hidden");
+  const input = document.getElementById("tkItemEditInput");
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+  document.getElementById("tkItemCancelBtn").onclick = closeModal;
+  document.getElementById("tkItemSaveBtn").onclick = () => {
+    const v = input.value.trim();
+    if(!v) return;
+    item.text = v;
+    saveTaikinData();
+    closeModal();
+    if(onProgress) onProgress();
+    if(onSaved) onSaved();
+  };
+  input.addEventListener("keydown", e => { if(e.key==="Enter") document.getElementById("tkItemSaveBtn").click(); });
+}
+
 function renderTkHistory(){
   const log = state.taikin.dayLog;
   const completed = state.taikin.completedHistory;
