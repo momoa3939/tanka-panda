@@ -616,6 +616,20 @@
     color:var(--muted);
     margin:2px 2px 12px;
   }
+  .tk-item-reorder-btn{
+    border:none;
+    background:none;
+    color:var(--muted);
+    font-size:13px;
+    font-family:'Kosugi Maru',sans-serif;
+    cursor:pointer;
+    padding:4px 6px;
+  }
+  .tk-reorder-hint{
+    font-size:12px;
+    color:var(--muted);
+    margin:-8px 2px 12px;
+  }
   .tk-taikin-btn{
     width:100%;
     padding:16px;
@@ -1338,9 +1352,14 @@ function renderTkList(listId){
       <input type="text" id="tkInput" placeholder="${escapeHtml(list.name)}に追加" maxlength="60">
       <button id="tkAddBtn">${ICONS.plus}</button>
     </div>
-    <div class="tk-progress"><span>${total===0?'':`${done}/${total} 完了`}</span></div>
+    <div class="tk-progress">
+      <span>${total===0?'':`${done}/${total} 完了`}</span>
+      ${total>=2?`<button class="tk-item-reorder-btn" id="tkItemReorderBtn">↕️ 並び替え</button>`:''}
+    </div>
+    ${total>=2?`<div class="tk-reorder-hint">📌 タスクは長押しでも並び替えできるよ</div>`:''}
     <div id="tkList"></div>
   `;
+  if(total>=2) document.getElementById("tkItemReorderBtn").onclick = () => openTkItemReorderModal(listId, () => { updateProgress(); draw(); });
 
   function updateProgress(){
     const arr = state.taikin.items[listId] || [];
@@ -1402,6 +1421,43 @@ function renderTkList(listId){
 }
 
 /* ====================== やることパンダ：記録（履歴） ====================== */
+/* ---- やることパンダ：タスクの並び替え(上下ボタン版) ---- */
+function openTkItemReorderModal(listId, onDone){
+  renderTkItemReorderModal(listId, onDone);
+  modalBackdrop.classList.remove("hidden");
+}
+function renderTkItemReorderModal(listId, onDone){
+  const arr = state.taikin.items[listId] || [];
+  const rows = arr.map((item, i) => `
+    <div class="reorder-row">
+      <span class="name">${escapeHtml(item.text)}</span>
+      <span class="reorder-btns">
+        <button data-dir="up" data-idx="${i}" ${i===0?'disabled':''}>${ICONS.up}</button>
+        <button data-dir="down" data-idx="${i}" ${i===arr.length-1?'disabled':''}>${ICONS.down}</button>
+      </span>
+    </div>
+  `).join("");
+  modalSheet.innerHTML = `
+    <h2>↕️ 並び替え</h2>
+    <div class="reorder-hint">このリストでのタスクの順番を変えられます。</div>
+    <div class="reorder-list">${rows}</div>
+    <div class="modal-actions"><button class="btn" id="tkItemReorderCloseBtn">閉じる</button></div>
+  `;
+  modalSheet.querySelectorAll(".reorder-btns button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      const dir = btn.dataset.dir;
+      const target = dir === "up" ? idx - 1 : idx + 1;
+      const list = state.taikin.items[listId];
+      if(target < 0 || target >= list.length) return;
+      [list[idx], list[target]] = [list[target], list[idx]];
+      saveTaikinData();
+      renderTkItemReorderModal(listId, onDone);
+    });
+  });
+  document.getElementById("tkItemReorderCloseBtn").onclick = () => { closeModal(); if(onDone) onDone(); };
+}
+
 /* ---- やることパンダ：タスクの長押し並び替え ---- */
 function attachTkItemReorderHandlers(container, listId, draw, updateProgress){
   const arr = state.taikin.items[listId] || [];
@@ -1639,7 +1695,8 @@ function openTkHelpModal(){
       <p><b>③ まとめてリセット</b><br>ホーム画面のボタンひとつで、「毎日リセット」のリストだけまとめてチェックを外せるよ。まだチェックしてない項目があるときは、ひとこと確認が出るよ。</p>
       <p><b>④ 記録を見る</b><br>🕐（時計マーク）から、過去の記録を振り返れます。「毎日リセット」の実績は日付ごとにまとまっていて、タップすると内訳が見られるよ。</p>
       <p><b>⑤ リストの編集・削除</b><br>各リストの右の鉛筆アイコンから、名前・色・リセット方式を変更したり、削除したりできます。削除するときは確認メッセージが出るので、間違って消してしまう心配はありません。</p>
-      <p><b>⑥ 並び替え</b><br>「設定」→「並び替え」から、リストの並び順を変えられるよ。</p>
+      <p><b>⑥ タスクの並び替え</b><br>タスクを指で長押しするとドラッグで順番を変えられます。長押しが苦手な場合は、リスト画面右上の「↕️ 並び替え」ボタンから、上下ボタンでも順番を変えられます。</p>
+      <p><b>⑦ リストの並び替え</b><br>「設定」→「並び替え」から、リストそのものの並び順を変えられるよ。</p>
       <p>画面下のパンダをタップすると「ちょい計算パンダ」に切り替わるよ。</p>
       <p>データはご自身のスマホの中だけに保存され、他の人と共有されることはありません。</p>
 
