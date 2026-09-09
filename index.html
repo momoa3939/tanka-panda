@@ -551,7 +551,22 @@
     padding:13px 14px;
     margin-bottom:8px;
     border:var(--card-border);
+    touch-action:pan-y;
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-touch-callout:none;
   }
+  .tk-item.dragging{
+    position:absolute;
+    left:0; right:0;
+    z-index:10;
+    box-shadow:0 8px 20px rgba(59,48,38,0.18);
+    opacity:0.97;
+    touch-action:none;
+  }
+  #tkList.reordering{ position:relative; }
+  #tkList.reordering .tk-item:not(.dragging){ transition:transform 0.18s ease; }
+  body.dragging-active{ -webkit-user-select:none; user-select:none; }
   .tk-item.checked{ opacity:0.55; }
   .tk-item.checked .tk-text{ text-decoration:line-through; color:var(--muted); }
   .tk-checkbox{
@@ -627,7 +642,7 @@
     transform:translateY(-50%);
     margin-right:8px;
   }
-  .tk-btn-panda{ width:32px; height:32px; object-fit:contain; flex-shrink:0; }
+  .tk-btn-panda{ width:40px; height:40px; object-fit:contain; flex-shrink:0; }
   .tk-add-list-btn{
     width:100%;
     display:flex;
@@ -1368,6 +1383,7 @@ function renderTkList(listId){
         draw();
       });
     });
+    attachTkItemReorderHandlers(listEl, listId, draw, updateProgress);
   }
   draw();
 
@@ -1386,6 +1402,124 @@ function renderTkList(listId){
 }
 
 /* ====================== やることパンダ：記録（履歴） ====================== */
+/* ---- やることパンダ：タスクの長押し並び替え ---- */
+function attachTkItemReorderHandlers(container, listId, draw, updateProgress){
+  const arr = state.taikin.items[listId] || [];
+  if(arr.length < 2) return;
+
+  container.querySelectorAll(".tk-item").forEach(row => {
+    let pressTimer = null;
+    let startX = 0, startY = 0;
+    let longPressFired = false;
+
+    const cancelPress = () => {
+      if(pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+    };
+
+    row.addEventListener("pointerdown", (e) => {
+      if(e.target.closest(".tk-checkbox") || e.target.closest(".tk-edit") || e.target.closest(".tk-remove")) return;
+      if(e.pointerType === "mouse" && e.button !== 0) return;
+      startX = e.clientX; startY = e.clientY;
+      longPressFired = false;
+      pressTimer = setTimeout(() => {
+        longPressFired = true;
+        startTkItemDrag(row, e, container, listId, draw, updateProgress);
+      }, 450);
+    });
+
+    row.addEventListener("pointermove", (e) => {
+      if(pressTimer){
+        if(Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) cancelPress();
+      }
+    });
+
+    row.addEventListener("pointerup", cancelPress);
+    row.addEventListener("pointercancel", cancelPress);
+  });
+}
+
+function startTkItemDrag(card, startEvent, container, listId, draw, updateProgress){
+  if(navigator.vibrate) navigator.vibrate(12);
+
+  const rows = Array.from(container.querySelectorAll(".tk-item"));
+  const draggedId = card.dataset.id;
+  const containerRect = container.getBoundingClientRect();
+
+  const originalRects = rows.map(el => {
+    const r = el.getBoundingClientRect();
+    return { id: el.dataset.id, top: r.top - containerRect.top, height: r.height };
+  });
+  const draggedIndex = originalRects.findIndex(r => r.id === draggedId);
+  const slotHeight = originalRects.length > 1
+    ? (originalRects[1].top - originalRects[0].top)
+    : (originalRects[0].height + 8);
+  const cardRect = card.getBoundingClientRect();
+  const offsetWithinCard = startEvent.clientY - cardRect.top;
+
+  const otherIdsInOrder = originalRects.filter(r => r.id !== draggedId).map(r => r.id);
+  let currentTargetIndex = draggedIndex;
+
+  container.classList.add("reordering");
+  document.body.classList.add("dragging-active");
+  card.classList.add("dragging");
+  card.style.top = originalRects[draggedIndex].top + "px";
+  card.style.height = originalRects[draggedIndex].height + "px";
+  try{ card.setPointerCapture(startEvent.pointerId); }catch(e){}
+
+  function applyOtherRowTransforms(targetIndex){
+    const newOrder = otherIdsInOrder.slice(0, targetIndex)
+      .concat([draggedId])
+      .concat(otherIdsInOrder.slice(targetIndex));
+
+    rows.forEach(el => {
+      if(el === card) return;
+      const orig = originalRects.find(r => r.id === el.dataset.id);
+      const newIdx = newOrder.indexOf(el.dataset.id);
+      const newTop = newIdx * slotHeight + originalRects[0].top;
+      el.style.transform = `translateY(${newTop - orig.top}px)`;
+    });
+  }
+
+  function onMove(e){
+    const containerRectNow = container.getBoundingClientRect();
+    const maxTop = originalRects[originalRects.length-1].top + originalRects[originalRects.length-1].height - originalRects[draggedIndex].height;
+    let top = (e.clientY - containerRectNow.top) - offsetWithinCard;
+    top = Math.max(0, Math.min(top, Math.max(0, maxTop)));
+    card.style.top = top + "px";
+
+    const dragCenter = top + originalRects[draggedIndex].height / 2 - originalRects[0].top;
+    let targetIndex = Math.round(dragCenter / slotHeight);
+    targetIndex = Math.max(0, Math.min(targetIndex, otherIdsInOrder.length));
+    if(targetIndex !== currentTargetIndex){
+      currentTargetIndex = targetIndex;
+      applyOtherRowTransforms(targetIndex);
+    }
+  }
+
+  function onUp(){
+    card.removeEventListener("pointermove", onMove);
+    card.removeEventListener("pointerup", onUp);
+    card.removeEventListener("pointercancel", onUp);
+
+    const newOrderIds = otherIdsInOrder.slice(0, currentTargetIndex)
+      .concat([draggedId])
+      .concat(otherIdsInOrder.slice(currentTargetIndex));
+
+    const itemsById = {};
+    state.taikin.items[listId].forEach(i => { itemsById[i.id] = i; });
+    state.taikin.items[listId] = newOrderIds.map(id => itemsById[id]);
+
+    saveTaikinData();
+    document.body.classList.remove("dragging-active");
+    if(updateProgress) updateProgress();
+    if(draw) draw();
+  }
+
+  card.addEventListener("pointermove", onMove);
+  card.addEventListener("pointerup", onUp);
+  card.addEventListener("pointercancel", onUp);
+}
+
 function openTkItemEditModal(listId, itemId, onSaved, onProgress){
   const item = state.taikin.items[listId].find(i => i.id === itemId);
   if(!item) return;
