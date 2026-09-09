@@ -646,7 +646,7 @@
   }
   .tk-add-list-btn svg{ width:16px; height:16px; }
   .tk-mini-progress{
-    font-size:12px;
+    font-size:15px;
     color:var(--muted);
     flex-shrink:0;
   }
@@ -1161,7 +1161,6 @@ function renderTaikinHome(){
         <span class="name">${escapeHtml(l.name)}</span>
         ${sub ? `<span class="tk-mini-progress">${sub}</span>` : ""}
         <button class="tk-list-edit" data-edit="${l.id}">${ICONS.edit}</button>
-        <span class="arrow">${ICONS.arrow}</span>
       </div>
     `;
   }).join("");
